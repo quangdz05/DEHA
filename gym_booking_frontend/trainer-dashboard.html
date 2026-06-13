@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lịch dạy huấn luyện viên - Trainer Dashboard</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="assets/css/app.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <style>
+    .trainer-hero {
+      background: linear-gradient(135deg, #151515 0%, #252525 100%);
+      color: #fff;
+      padding: 40px 0;
+      border-radius: 12px;
+      margin-bottom: 30px;
+    }
+  </style>
+</head>
+<body onload="initTrainerDashboard()">
+  <nav class="navbar navbar-expand-lg navbar-dark fixed-top">
+    <div class="container">
+      <a class="navbar-brand fw-bold" href="index.html"><img class="brand-logo me-2" src="assets/images/logo.png">Gym Booking</a>
+      <button class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#nav"><span class="navbar-toggler-icon"></span></button>
+      <div id="nav" class="collapse navbar-collapse">
+        <ul class="navbar-nav ms-auto align-items-lg-center">
+          <li class="nav-item"><a class="nav-link" href="classes.html">Lớp tập</a></li>
+          <li class="nav-item"><a class="nav-link" href="schedules.html">Lịch tập</a></li>
+          <li class="nav-item"><a class="nav-link" href="trainers.html">HLV</a></li>
+          <li class="nav-item"><a class="nav-link" href="packages.html">Gói tập</a></li>
+          <li class="nav-item"><a class="nav-link" href="/pt-packages/">Gói PT</a></li>
+          <li class="nav-item d-none" data-role="member"><a class="nav-link" href="my-bookings.html">Lịch của tôi</a></li>
+          <li class="nav-item d-none" data-role="member"><a class="nav-link" href="/my-pt-packages/">Gói PT của tôi</a></li>
+          <li class="nav-item d-none" data-role="trainer"><a class="nav-link active" href="trainer-dashboard.html">Lịch dạy HLV</a></li>
+          <li class="nav-item d-none" data-role="admin"><a class="nav-link" href="admin-dashboard.html">Quản lý Admin</a></li>
+          <li class="nav-item" data-auth="guest"><a class="nav-link" href="login.html">Đăng nhập</a></li>
+          <li class="nav-item d-none" data-auth="user">
+            <span id="navUserName" class="text-light me-2 align-middle"></span>
+            <button class="btn btn-outline-light btn-sm ms-lg-2" onclick="logout()">Đăng xuất</button>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </nav>
+
+  <main class="page section section-muted">
+    <div class="container">
+      <div id="messages"></div>
+
+      <!-- Trainer Welcome Section -->
+      <div class="trainer-hero px-4 px-md-5">
+        <div class="row align-items-center">
+          <div class="col-md-8">
+            <h1 class="fw-bold mb-1"><i class="bi bi-people-fill text-brand me-2"></i>Khu vực Huấn luyện viên</h1>
+            <p class="text-secondary mb-0">Theo dõi các lịch dạy được phân công và xem danh sách học viên đăng ký tham gia lớp học của bạn.</p>
+          </div>
+          <div class="col-md-4 text-md-end mt-3 mt-md-0">
+            <span class="badge bg-brand py-2 px-3 fs-6">Huấn luyện viên</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Teaching Schedule Section -->
+      <div class="card border-0 shadow-sm rounded-3">
+        <div class="card-header bg-white py-3">
+          <h5 class="fw-bold mb-0 text-dark"><i class="bi bi-calendar3 text-brand me-2"></i>Lịch giảng dạy của tôi</h5>
+        </div>
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th>Lớp Học</th>
+                  <th>Phòng Tập</th>
+                  <th>Thời Gian Bắt Đầu</th>
+                  <th>Sĩ Số</th>
+                  <th>Trạng Thái</th>
+                  <th>Roster</th>
+                </tr>
+              </thead>
+              <tbody id="trainerScheduleRows">
+                <tr>
+                  <td colspan="6" class="text-center py-4 text-muted">
+                    <div class="spinner-border spinner-border-sm text-brand me-1"></div> Đang tải lịch dạy...
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Personal Training Booking Section -->
+      <div class="card border-0 shadow-sm rounded-3 mt-4">
+        <div class="card-header bg-white py-3">
+          <h5 class="fw-bold mb-0 text-dark"><i class="bi bi-person-check text-brand me-2"></i>Lich 1-1 voi hoi vien</h5>
+        </div>
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th>Hoi vien</th>
+                  <th>Bat dau</th>
+                  <th>Ket thuc</th>
+                  <th>Trang thai</th>
+                  <th>Ghi chu</th>
+                  <th>Diem danh</th>
+                </tr>
+              </thead>
+              <tbody id="trainerPersonalBookingRows">
+                <tr>
+                  <td colspan="6" class="text-center py-4 text-muted">
+                    <div class="spinner-border spinner-border-sm text-brand me-1"></div> Dang tai lich 1-1...
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="card border-0 shadow-sm rounded-3 mt-4">
+        <div class="card-header bg-white py-3">
+          <h5 class="fw-bold mb-0 text-dark"><i class="bi bi-calendar-month text-brand me-2"></i>Hoc vien dang ky theo thang</h5>
+        </div>
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th>Hoc vien</th>
+                  <th>Thoi gian</th>
+                  <th>Tan suat</th>
+                  <th>Gio mong muon</th>
+                  <th>Trang thai</th>
+                  <th>Hanh dong</th>
+                </tr>
+              </thead>
+              <tbody id="trainerMonthlyStudentRows">
+                <tr><td colspan="6" class="text-center py-4 text-muted">Dang tai...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Trainer Reviews Section -->
+      <div class="card border-0 shadow-sm rounded-3 mt-4">
+        <div class="card-header bg-white py-3">
+          <h5 class="fw-bold mb-0 text-dark"><i class="bi bi-star-fill text-brand me-2"></i>Đánh giá phản hồi từ học viên</h5>
+        </div>
+        <div class="card-body">
+          <div id="trainerReviewList" class="row g-3">
+            <p class="text-muted">Đang tải đánh giá...</p>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- Participant Modal -->
+  <div class="modal fade" id="participantModal" tabindex="-1" aria-labelledby="participantModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
+      <div class="modal-content border-0 shadow-lg">
+        <div class="modal-header bg-dark text-white py-3">
+          <h5 class="modal-title fw-bold" id="participantModalLabel">Danh sách học viên</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body p-0">
+          <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th style="width: 60px;">STT</th>
+                  <th>Học Viên / Hồ Sơ Sức Khỏe</th>
+                  <th>Số Điện Thoại</th>
+                  <th>Trạng Thái Đặt</th>
+                  <th>Điểm Danh</th>
+                </tr>
+              </thead>
+              <tbody id="participantRows">
+                <!-- Loaded dynamically -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="modal-footer bg-light py-2">
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Đóng</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer class="footer"><div class="container">© 2026 Gym Booking</div></footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="assets/js/api.js"></script>
+  <script src="assets/js/app.js"></script>
+  <script>
+    async function initTrainerDashboard() {
+      // Validate role first
+      const userStr = localStorage.getItem("gymUser");
+      const user = userStr ? JSON.parse(userStr) : null;
+      if (!user || user.role !== "trainer") {
+        alert("Bạn không có quyền truy cập trang này!");
+        location.href = "index.html";
+        return;
+      }
+      
+      // Load schedules
+      await loadTrainerSchedules();
+      await loadTrainerPersonalBookings();
+      await loadTrainerMonthlyStudents();
+      await loadTrainerReviews();
+    }
+  </script>
+</body>
+</html>

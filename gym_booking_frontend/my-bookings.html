@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lịch tập của tôi</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <link rel="stylesheet" href="assets/css/app.css">
+</head>
+<body onload="loadMyBookings()">
+  <nav class="navbar navbar-expand-lg navbar-dark fixed-top">
+    <div class="container">
+      <a class="navbar-brand fw-bold" href="index.html"><img class="brand-logo" src="assets/images/logo.png" alt="">Gym Booking</a>
+      <button class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#nav" aria-label="Mở menu"><span class="navbar-toggler-icon"></span></button>
+      <div id="nav" class="collapse navbar-collapse">
+        <ul class="navbar-nav ms-auto align-items-lg-center">
+          <li class="nav-item"><a class="nav-link" href="classes.html">Lớp tập</a></li>
+          <li class="nav-item"><a class="nav-link" href="schedules.html">Lịch tập</a></li>
+          <li class="nav-item"><a class="nav-link" href="trainers.html">HLV</a></li>
+          <li class="nav-item"><a class="nav-link" href="packages.html">Gói tập</a></li>
+          <li class="nav-item"><a class="nav-link" href="/pt-packages/">Gói PT</a></li>
+          <li class="nav-item d-none" data-role="member"><a class="nav-link active" href="my-bookings.html">Lịch của tôi</a></li>
+          <li class="nav-item d-none" data-role="member"><a class="nav-link" href="/my-pt-packages/">Gói PT của tôi</a></li>
+          <li class="nav-item d-none" data-role="trainer"><a class="nav-link" href="trainer-dashboard.html">Lịch dạy HLV</a></li>
+          <li class="nav-item d-none" data-role="admin"><a class="nav-link" href="admin-dashboard.html">Quản lý Admin</a></li>
+          <li class="nav-item" data-auth="guest"><a class="nav-link" href="login.html">Đăng nhập</a></li>
+          <li class="nav-item d-none" data-auth="user">
+            <span id="navUserName" class="me-lg-2"></span>
+            <button class="btn btn-outline-light btn-sm ms-lg-2" onclick="logout()">Đăng xuất</button>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </nav>
+
+  <main class="page section">
+    <div class="container">
+      <div id="messages"></div>
+      <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+        <div>
+          <h1 class="page-title mb-1">Lịch tập của tôi</h1>
+          <p class="page-subtitle mb-0">Theo dõi lịch lớp, lịch 1-1 và đánh giá sau khi hoàn thành buổi tập.</p>
+        </div>
+        <div class="language-switch">
+          <label for="appLangSelect" class="small text-muted mb-0">Ngôn ngữ</label>
+          <select id="appLangSelect" class="form-select form-select-sm">
+            <option value="vi">Tiếng Việt</option>
+            <option value="en">English</option>
+          </select>
+        </div>
+      </div>
+      <div class="table-card">
+        <div class="table-responsive">
+          <table class="table table-hover align-middle my-bookings-table">
+            <thead>
+              <tr>
+                <th>Mã</th>
+                <th>Lớp</th>
+                <th>Thời gian</th>
+                <th>Trạng thái</th>
+                <th>Hành động</th>
+              </tr>
+            </thead>
+            <tbody id="bookingRows"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <div class="modal fade" id="reviewModal" tabindex="-1" aria-labelledby="reviewModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content border-0 shadow-lg">
+        <div class="modal-header bg-dark text-white py-3">
+          <h5 class="modal-title fw-bold" id="reviewModalLabel">Gửi đánh giá dịch vụ</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <form id="reviewForm" onsubmit="submitReview(event)">
+            <input type="hidden" id="reviewTrainerId" name="trainer_id">
+            <input type="hidden" id="reviewGymClassId" name="gym_class_id">
+            <div class="mb-3">
+              <label class="form-label fw-bold">Đối tượng đánh giá</label>
+              <div id="reviewTargetLabel" class="alert alert-secondary py-2 mb-0">...</div>
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-bold">Chọn sao (1-5)</label>
+              <div class="star-rating d-flex gap-2 fs-2 text-warning justify-content-center">
+                <i class="bi bi-star star-btn" data-value="1" style="cursor: pointer;"></i>
+                <i class="bi bi-star star-btn" data-value="2" style="cursor: pointer;"></i>
+                <i class="bi bi-star star-btn" data-value="3" style="cursor: pointer;"></i>
+                <i class="bi bi-star star-btn" data-value="4" style="cursor: pointer;"></i>
+                <i class="bi bi-star star-btn" data-value="5" style="cursor: pointer;"></i>
+              </div>
+              <input type="hidden" id="reviewRating" name="rating" value="5" required>
+            </div>
+            <div class="mb-3">
+              <label for="reviewComment" class="form-label fw-bold">Nhận xét của bạn</label>
+              <textarea class="form-control" id="reviewComment" name="comment" rows="3" placeholder="Chia sẻ trải nghiệm của bạn..." required></textarea>
+            </div>
+            <button type="submit" class="btn btn-brand w-100">Gửi đánh giá</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="assets/js/api.js"></script>
+  <script src="assets/js/app.js"></script>
+</body>
+</html>

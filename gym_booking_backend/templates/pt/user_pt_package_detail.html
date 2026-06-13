@@ -1,0 +1,156 @@
+{% extends "pt/base.html" %}
+
+{% block title %}Chi tiết gói PT - Gym Booking{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center gap-3 mb-4">
+  <a href="{% url 'user_pt_package_list' %}" class="btn btn-outline-brand btn-sm">
+    <i class="bi bi-arrow-left"></i> Quay lại danh sách
+  </a>
+  <h1 class="h2 fw-bold text-dark mb-0">Chi tiết gói PT #PT-SUB-{{ user_package.id }}</h1>
+</div>
+
+<div class="row g-4">
+  <!-- Package Info Card -->
+  <div class="col-lg-4">
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-body p-4">
+        <h4 class="card-title fw-bold text-dark mb-3">Thông tin gói tập</h4>
+        
+        <div class="mb-4">
+          <label class="text-muted small fw-bold text-uppercase d-block mb-1">Gói PT đăng ký</label>
+          <span class="fs-5 fw-bold text-brand d-block">{{ user_package.package.name }}</span>
+        </div>
+
+        <div class="mb-4">
+          <label class="text-muted small fw-bold text-uppercase d-block mb-1">Huấn luyện viên cá nhân</label>
+          <div class="d-flex align-items-center gap-2">
+            <div class="bg-brand text-white rounded-circle d-flex align-items-center justify-content-center" style="width: 38px; height: 38px; font-weight: 800;">
+              {{ user_package.trainer.name|slice:":2"|upper }}
+            </div>
+            <div>
+              <span class="fw-semibold text-dark d-block">{{ user_package.trainer.name }}</span>
+              <span class="text-muted small">{{ user_package.trainer.email }}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="row mb-4">
+          <div class="col-6">
+            <label class="text-muted small fw-bold text-uppercase d-block mb-1">Đã tập</label>
+            <span class="fs-4 fw-bold text-success">{{ user_package.used_sessions }} buổi</span>
+          </div>
+          <div class="col-6">
+            <label class="text-muted small fw-bold text-uppercase d-block mb-1">Tổng số buổi</label>
+            <span class="fs-4 fw-bold text-dark">{{ user_package.total_sessions }} buổi</span>
+          </div>
+        </div>
+
+        <hr class="my-4 border-light">
+
+        <div class="mb-3">
+          <i class="bi bi-clock-fill text-muted me-2"></i>
+          <span>Khung giờ: <strong>{{ user_package.start_time|time:"H:i" }} - {{ user_package.end_time|time:"H:i" }}</strong></span>
+        </div>
+        <div class="mb-3">
+          <i class="bi bi-calendar-week-fill text-muted me-2"></i>
+          <span>Thứ tập: <strong>Thứ {{ user_package.selected_weekdays }}</strong></span>
+        </div>
+        <div class="mb-3">
+          <i class="bi bi-calendar-range-fill text-muted me-2"></i>
+          <span>Thời hạn: <strong>{{ user_package.start_date|date:"d/m/Y" }} - {{ user_package.end_date|date:"d/m/Y" }}</strong></span>
+        </div>
+        <div class="mb-3">
+          <i class="bi bi-info-circle-fill text-muted me-2"></i>
+          <span>Trạng thái: 
+            {% if user_package.status == 'active' %}
+              <span class="badge bg-success-subtle text-success border border-success-subtle rounded-pill">Đang chạy</span>
+            {% elif user_package.status == 'completed' %}
+              <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle rounded-pill">Hoàn thành</span>
+            {% else %}
+              <span class="badge bg-danger-subtle text-danger border border-danger-subtle rounded-pill">Đã hủy</span>
+            {% endif %}
+          </span>
+        </div>
+
+        {% if user_package.status == 'active' %}
+          <div class="mt-4 pt-2">
+            <form method="post" action="{% url 'cancel_user_pt_package' user_package.id %}" onsubmit="return confirm('Bạn chắc chắn muốn hủy gói tập PT này? Mọi buổi tập chưa diễn ra thuộc gói sẽ bị hủy và không thể khôi phục.');">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-outline-danger w-100 py-3">
+                <i class="bi bi-x-octagon-fill me-2"></i> Hủy toàn bộ gói tập
+              </button>
+            </form>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Bookings List Column -->
+  <div class="col-lg-8">
+    <div class="card border-0 shadow-sm p-4 bg-white">
+      <h3 class="h4 fw-bold text-dark mb-4 border-bottom pb-2">
+        <i class="bi bi-calendar3 text-brand me-2"></i> Lịch các buổi tập đã tạo tự động
+      </h3>
+
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th scope="col" style="width: 8%">STT</th>
+              <th scope="col" style="width: 25%">Mã buổi</th>
+              <th scope="col" style="width: 25%">Ngày tập</th>
+              <th scope="col" style="width: 22%">Trạng thái</th>
+              <th scope="col" style="width: 20%" class="text-end">Thao tác</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for booking in bookings %}
+              <tr>
+                <td>{{ forloop.counter }}</td>
+                <td>
+                  <span class="fw-semibold text-dark">{{ booking.booking_code }}</span>
+                </td>
+                <td>
+                  <div class="fw-bold text-dark">{{ booking.booking_date|date:"d/m/Y" }}</div>
+                  <div class="text-muted small">{{ booking.start_time|time:"H:i" }} - {{ booking.end_time|time:"H:i" }}</div>
+                </td>
+                <td>
+                  {% if booking.status == 'confirmed' %}
+                    <span class="badge bg-success-subtle text-success border border-success-subtle rounded-pill py-1 px-2">Đã xác nhận</span>
+                  {% elif booking.status == 'completed' %}
+                    <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle rounded-pill py-1 px-2">Hoàn thành</span>
+                  {% elif booking.status == 'cancelled' %}
+                    <span class="badge bg-danger-subtle text-danger border border-danger-subtle rounded-pill py-1 px-2">Đã hủy</span>
+                  {% else %}
+                    <span class="badge bg-warning-subtle text-warning border border-warning-subtle rounded-pill py-1 px-2">Chờ duyệt</span>
+                  {% endif %}
+                </td>
+                <td class="text-end">
+                  {% if booking.status == 'confirmed' %}
+                    <form method="post" action="{% url 'cancel_pt_booking' booking.id %}" style="display:inline;" onsubmit="return confirm('Bạn chắc chắn muốn hủy buổi tập ngày {{ booking.booking_date|date:\'d/m/Y\' }} không?');">
+                      {% csrf_token %}
+                      <button type="submit" class="btn btn-outline-danger btn-sm">
+                        <i class="bi bi-x-circle"></i> Hủy buổi
+                      </button>
+                    </form>
+                  {% else %}
+                    <span class="text-muted small">-</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% empty %}
+              <tr>
+                <td colspan="5" class="text-center py-4">
+                  <span class="text-muted">Không tìm thấy buổi tập nào cho gói này.</span>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

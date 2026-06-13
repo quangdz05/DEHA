@@ -1,0 +1,44 @@
+@media (max-width: 991.98px) {
+    .hero-section {
+        min-height: 480px;
+    }
+
+    .hero-content h1 {
+        font-size: 2.6rem;
+    }
+
+    .detail-layout {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 767.98px) {
+    .section-block {
+        padding: 48px 0;
+    }
+
+    .hero-content h1 {
+        font-size: 2.1rem;
+    }
+
+    .hero-content p {
+        font-size: 1rem;
+    }
+
+    .section-heading {
+        align-items: start;
+        flex-direction: column;
+    }
+
+    .auth-card,
+    .form-panel,
+    .confirm-card,
+    .profile-card {
+        padding: 22px;
+    }
+
+    .profile-header {
+        align-items: start;
+        flex-direction: column;
+    }
+}
