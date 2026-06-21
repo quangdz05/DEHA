@@ -471,30 +471,30 @@ function getStatusLabel(status) {
   const english = getAppLanguage() === "en";
   const labels = english
     ? {
-        pending: "Pending",
-        confirmed: "Confirmed",
-        cancelled: "Cancelled",
-        completed: "Completed",
-        no_show: "No Show",
-        waitlist: "Waitlist",
-      }
+      pending: "Pending",
+      confirmed: "Confirmed",
+      cancelled: "Cancelled",
+      completed: "Completed",
+      no_show: "No Show",
+      waitlist: "Waitlist",
+    }
     : {
-        pending: "Cho xac nhan",
-        confirmed: "Da xac nhan",
-        cancelled: "Da huy",
-        completed: "Hoan thanh",
-        no_show: "Vang mat",
-        waitlist: "Danh sach cho",
-      };
+      pending: "Cho xac nhan",
+      confirmed: "Da xac nhan",
+      cancelled: "Da huy",
+      completed: "Hoan thanh",
+      no_show: "Vang mat",
+      waitlist: "Danh sach cho",
+    };
   return labels[status] || status;
 }
 
 function setupStarRating() {
   document.querySelectorAll(".star-btn").forEach(btn => {
-    btn.onclick = function() {
+    btn.onclick = function () {
       const val = parseInt(btn.getAttribute("data-value"));
       document.getElementById("reviewRating").value = val;
-      
+
       document.querySelectorAll(".star-btn").forEach(s => {
         const sVal = parseInt(s.getAttribute("data-value"));
         if (sVal <= val) {
@@ -512,13 +512,13 @@ function setupStarRating() {
 function showReviewModal(gymClassId, trainerId, targetName) {
   const modalEl = document.getElementById("reviewModal");
   if (!modalEl) return;
-  
+
   document.getElementById("reviewGymClassId").value = gymClassId || "";
   document.getElementById("reviewTrainerId").value = trainerId || "";
   document.getElementById("reviewTargetLabel").textContent = targetName;
   document.getElementById("reviewRating").value = "5";
   document.getElementById("reviewComment").value = "";
-  
+
   document.querySelectorAll(".star-btn").forEach(s => {
     s.classList.remove("bi-star");
     s.classList.add("bi-star-fill");
@@ -973,17 +973,17 @@ async function updateTrainerMonthlyStatus(bookingId, status) {
 async function loadScheduleParticipants(scheduleId, className, dateTimeStr) {
   const modalTitle = document.querySelector("#participantModalLabel");
   const container = document.querySelector("#participantRows");
-  
+
   if (modalTitle) modalTitle.textContent = `Danh sach hoc vien - ${className} (${dateTimeStr})`;
   if (!container) return;
-  
+
   // Store these for reloading roster later
   window.currentRosterScheduleId = scheduleId;
   window.currentRosterClassName = className;
   window.currentRosterDateTime = dateTimeStr;
 
   container.innerHTML = `<tr><td colspan="5" class="text-center"><div class="spinner-border spinner-border-sm text-brand"></div> ang tai...</td></tr>`;
-  
+
   // Show modal using Bootstrap if exists
   const modalEl = document.getElementById("participantModal");
   if (modalEl) {
@@ -1121,13 +1121,159 @@ function trainerCard(item) {
   </div>`;
 }
 
-function showTrainerDetail(trainerId) {
-  const card = (window.gymTrainerCache || []).find((trainer) => trainer.id === trainerId);
-  if (!card) {
-    showAlert("Chưa có thông tin chi tiết HLV.", "warning");
-    return;
+async function showTrainerDetail(trainerId) {
+  try {
+    let modalEl = document.getElementById("trainerDetailModal");
+    if (!modalEl) {
+      modalEl = document.createElement("div");
+      modalEl.id = "trainerDetailModal";
+      modalEl.className = "modal fade";
+      modalEl.setAttribute("tabindex", "-1");
+      modalEl.setAttribute("aria-hidden", "true");
+      modalEl.innerHTML = `
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+          <div class="modal-content border-0 shadow-lg" style="border-radius: var(--radius);">
+            <div class="modal-header bg-dark text-white py-3">
+              <h5 class="modal-title fw-bold">Thông tin chi tiết HLV</h5>
+              <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="trainerDetailModalBody">
+              <div class="text-center py-5">
+                <div class="spinner-border text-brand" role="status">
+                  <span class="visually-hidden">Đang tải...</span>
+                </div>
+              </div>
+            </div>
+            <div class="modal-footer bg-light py-2">
+              <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Đóng</button>
+              <button type="button" class="btn btn-brand btn-sm" id="btnBookTrainerFromDetail">Đặt lịch 1-1</button>
+            </div>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(modalEl);
+    }
+
+    let modal = bootstrap.Modal.getInstance(modalEl);
+    if (!modal) {
+      modal = new bootstrap.Modal(modalEl);
+    }
+
+    // Reset body to loading spinner before opening/fetching
+    const bodyEl = document.getElementById("trainerDetailModalBody");
+    bodyEl.innerHTML = `
+      <div class="text-center py-5">
+        <div class="spinner-border text-brand" role="status">
+          <span class="visually-hidden">Đang tải...</span>
+        </div>
+      </div>
+    `;
+
+    modal.show();
+
+    // Fetch trainer details and reviews
+    const [trainer, reviews] = await Promise.all([
+      apiFetch(`/trainers/${trainerId}/`),
+      apiFetch(`/trainers/${trainerId}/reviews/`).catch(() => [])
+    ]);
+
+    const avatar = trainer.image
+      ? `<img class="trainer-img mb-3" src="${imageUrl(trainer.image, defaultAvatar)}" alt="${trainer.name}">`
+      : `<div class="trainer-avatar mb-3">${getInitials(trainer.name)}</div>`;
+
+    const certsHtml = trainer.certifications
+      ? trainer.certifications.split('\n').filter(c => c.trim()).map(c => `<span class="badge-soft mb-2 me-2" style="font-size: 0.85rem; padding: 6px 12px;">${c}</span>`).join('')
+      : `<span class="text-muted small">Chưa cập nhật bằng cấp</span>`;
+
+    let reviewsHtml = "";
+    if (reviews && reviews.length > 0) {
+      reviewsHtml = reviews.map(r => {
+        const stars = "★".repeat(r.rating) + "☆".repeat(5 - r.rating);
+        const dateStr = new Date(r.created_at).toLocaleDateString("vi-VN");
+        return `
+          <div class="border-bottom pb-2 mb-2">
+            <div class="d-flex justify-content-between mb-1">
+              <strong class="text-dark">@${r.user_username}</strong>
+              <span class="text-warning" style="font-size: 0.9rem;">${stars}</span>
+            </div>
+            <p class="mb-1 text-secondary small">${r.comment || "<i>Không có nhận xét</i>"}</p>
+            <small class="text-muted" style="font-size: 0.75rem;">${dateStr}</small>
+          </div>
+        `;
+      }).join("");
+    } else {
+      reviewsHtml = `<p class="text-muted small italic my-3 text-center">Chưa có đánh giá nào từ học viên</p>`;
+    }
+
+    bodyEl.innerHTML = `
+      <div class="row g-4">
+        <!-- Left Side: Profile Card & Basic Info -->
+        <div class="col-md-5 text-center border-end">
+          <div class="d-flex flex-column align-items-center h-100 p-2">
+            ${avatar}
+            <h4 class="fw-bold mt-2 mb-1">${trainer.name}</h4>
+            <p class="text-secondary mb-3">${trainer.specialty}</p>
+            
+            <div class="w-100 bg-light rounded-3 p-3 mb-3 text-start">
+              <div class="d-flex justify-content-between mb-2">
+                <span class="text-muted"><i class="bi bi-star-fill text-warning me-1"></i> Kinh nghiệm:</span>
+                <strong>${trainer.experience_years || 0} năm</strong>
+              </div>
+              <div class="d-flex justify-content-between mb-0">
+                <span class="text-muted"><i class="bi bi-cash-stack text-success me-1"></i> Giá buổi tập:</span>
+                <strong class="text-brand">${money(trainer.session_price || 0)}</strong>
+              </div>
+            </div>
+            
+            <div class="w-100 text-start pt-2 border-top">
+              <p class="mb-2 text-truncate small">
+                <i class="bi bi-envelope-fill text-muted me-2"></i>
+                <a href="mailto:${trainer.email}" class="text-secondary">${trainer.email}</a>
+              </p>
+              <p class="mb-0 small">
+                <i class="bi bi-telephone-fill text-muted me-2"></i>
+                <a href="tel:${trainer.phone}" class="text-secondary">${trainer.phone || "Chưa cập nhật"}</a>
+              </p>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Right Side: Bio, Certifications, and Reviews -->
+        <div class="col-md-7">
+          <div class="p-2">
+            <h5 class="fw-bold mb-2 text-dark"><i class="bi bi-person-lines-fill text-brand me-2"></i>Giới thiệu bản thân</h5>
+            <p class="text-secondary small mb-4" style="line-height: 1.6; white-space: pre-line;">
+              ${trainer.bio || "Không có giới thiệu nào từ huấn luyện viên này."}
+            </p>
+            
+            <h5 class="fw-bold mb-2 text-dark"><i class="bi bi-award-fill text-brand me-2"></i>Bằng cấp & Chứng chỉ</h5>
+            <div class="d-flex flex-wrap mb-4">
+              ${certsHtml}
+            </div>
+            
+            <h5 class="fw-bold mb-2 text-dark"><i class="bi bi-chat-left-heart-fill text-brand me-2"></i>Đánh giá từ học viên</h5>
+            <div class="trainer-reviews-container overflow-y-auto px-1" style="max-height: 180px;">
+              ${reviewsHtml}
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    // Hook up booking button in detail modal
+    const bookBtn = document.getElementById("btnBookTrainerFromDetail");
+    if (bookBtn) {
+      bookBtn.onclick = function () {
+        const modalInstance = bootstrap.Modal.getInstance(modalEl);
+        if (modalInstance) modalInstance.hide();
+        setTimeout(() => {
+          openTrainerBookingModal(trainer.id, trainer.name);
+        }, 350);
+      };
+    }
+  } catch (err) {
+    showAlert("Không thể tải thông tin chi tiết HLV: " + err.message, "danger");
   }
-  showAlert(`${card.name}: ${card.specialty || "Huấn luyện viên"} - ${card.experience_years || 0} năm kinh nghiệm.`, "info");
 }
 
 function openTrainerBookingModal(trainerId, trainerName) {
@@ -1280,7 +1426,7 @@ function openTrainerBookingPaymentModal(booking) {
 }
 
 function packageCard(item) {
-  const freezeInfo = item.is_freezable 
+  const freezeInfo = item.is_freezable
     ? `<span class="badge-soft">Hỗ trợ tạm dừng tối đa ${item.max_freeze_days} ngày</span>`
     : `<span class="badge bg-light text-muted border">Không hỗ trợ tạm dừng</span>`;
   return `<div class="col-md-4">
@@ -1308,7 +1454,7 @@ function getPackageActionButton(packageId) {
   if (user.role === "admin" || user.role === "trainer") {
     return `<button class="btn w-100" disabled>Không khả dụng</button>`;
   }
-  
+
   // Check if they already have active or pending membership
   const hasActiveOrPending = window.userMemberships && window.userMemberships.some(
     m => m.status === "active" || m.status === "pending"
@@ -1427,7 +1573,7 @@ async function registerPackage(id) {
     // Hook up confirm button
     const confirmBtn = document.getElementById("btnConfirmPayment");
     if (confirmBtn) {
-      confirmBtn.onclick = async function() {
+      confirmBtn.onclick = async function () {
         const selectedMethod = document.querySelector('input[name="paymentMethod"]:checked').value;
         await processMockPayment(selectedMethod, modal);
       };
@@ -1541,21 +1687,21 @@ async function loadMyMemberships() {
           <td>${statusBadge(m.status)}</td>
           <td>
             <div class="d-flex gap-1">
-              ${isFreezeEligible 
-                ? `<button class="btn btn-sm btn-warning text-dark fw-bold" onclick="showFreezeModal(${m.id})">Tạm dừng</button>` 
-                : ''
-              }
+              ${isFreezeEligible
+          ? `<button class="btn btn-sm btn-warning text-dark fw-bold" onclick="showFreezeModal(${m.id})">Tạm dừng</button>`
+          : ''
+        }
               ${m.status === 'active'
-                ? `<button class="btn btn-sm btn-action-delete" onclick="cancelActiveMembership(${m.id})">Hủy gói</button>`
-                : ''
-              }
+          ? `<button class="btn btn-sm btn-action-delete" onclick="cancelActiveMembership(${m.id})">Hủy gói</button>`
+          : ''
+        }
               ${m.status === 'pending'
-                ? `
+          ? `
                   <button class="btn btn-sm btn-brand fw-bold me-1" onclick="payPendingMembership(${m.id}, '${m.package_name}', ${m.package_price}, '${m.invoice_details ? m.invoice_details.invoice_number : ''}')">Thanh toán</button>
                   <button class="btn btn-sm btn-action-delete" onclick="cancelPendingMembership(${m.id})">Hủy</button>
                 `
-                : ''
-              }
+          : ''
+        }
               ${m.status === 'expired' || m.status === 'cancelled' ? '<span class="text-muted small">Không khả dụng</span>' : ''}
             </div>
           </td>
@@ -1654,7 +1800,7 @@ function payPendingMembership(membershipId, packageName, amount, invoiceNumber) 
   // Hook up confirm button
   const confirmBtn = document.getElementById("btnConfirmPayment");
   if (confirmBtn) {
-    confirmBtn.onclick = async function() {
+    confirmBtn.onclick = async function () {
       const selectedMethod = document.querySelector('input[name="paymentMethod"]:checked').value;
       await processMockPayment(selectedMethod, modal);
     };
@@ -1703,7 +1849,7 @@ async function submitFreeze(event) {
       method: "POST",
       body: JSON.stringify({ start_date, end_date, reason }),
     });
-    
+
     const modalEl = document.getElementById("freezeModal");
     const modal = bootstrap.Modal.getInstance(modalEl);
     if (modal) {
@@ -1727,7 +1873,7 @@ async function loadAdminInvoices() {
       const dateStr = new Date(inv.created_at).toLocaleString("vi-VN");
       const statusLabel = inv.status === 'paid' ? 'a thanh toan' : inv.status === 'unpaid' ? 'Chua thanh toan' : 'a huy';
       const statusClass = inv.status === 'paid' ? 'bg-success text-white' : 'bg-warning text-dark';
-      
+
       return `
         <tr>
           <td><strong class="text-brand">${inv.invoice_number}</strong></td>
@@ -1759,7 +1905,7 @@ async function loadScheduleSetupForm() {
 
     classSelect.innerHTML = classes.map(c => `<option value="${c.id}">${c.name}</option>`).join("");
     roomSelect.innerHTML = rooms.map(r => `<option value="${r.id}">${r.name} (Suc chua: ${r.capacity})</option>`).join("");
-    trainerSelect.innerHTML = `<option value="">-- Mac inh (Theo lop hoc) --</option>` + 
+    trainerSelect.innerHTML = `<option value="">-- Mac inh (Theo lop hoc) --</option>` +
       trainers.map(t => `<option value="${t.id}">${t.name} (${t.specialty})</option>`).join("");
 
     await loadAdminScheduleList();
@@ -1912,7 +2058,7 @@ async function submitCreateSchedule(event) {
     if (trainer) {
       payload.trainer = trainer;
     }
-    
+
     await apiFetch("/admin/schedules/create/", {
       method: "POST",
       body: JSON.stringify(payload)

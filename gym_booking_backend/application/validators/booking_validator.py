@@ -1,3 +1,4 @@
+import datetime
 from datetime import timedelta
 
 from django.utils import timezone
@@ -54,13 +55,24 @@ def validate_weekly_booking_limit(user, schedule=None, start_time=None):
         return
 
     if schedule:
-        base_date = timezone.localdate(schedule.start_time)
+        base_dt = timezone.as_localtime(schedule.start_time)
     elif start_time:
-        base_date = timezone.localdate(start_time)
+        base_dt = timezone.as_localtime(start_time) if timezone.is_aware(start_time) else timezone.make_aware(start_time)
     else:
-        base_date = timezone.localdate()
-    week_start = base_date - timedelta(days=base_date.weekday())
-    week_end = week_start + timedelta(days=6)
+        base_dt = timezone.localtime()
+
+    local_date = base_dt.date()
+    monday_date = local_date - timedelta(days=local_date.weekday())
+
+    week_start = timezone.make_aware(
+        datetime.datetime.combine(monday_date, datetime.time.min),
+        timezone.get_current_timezone()
+    )
+    week_end = timezone.make_aware(
+        datetime.datetime.combine(monday_date + timedelta(days=6), datetime.time.max),
+        timezone.get_current_timezone()
+    )
+
     current_count = booking_repository.count_user_bookings_in_week(user, week_start, week_end)
     if current_count >= limit:
         raise MembershipRequiredException("Weekly booking limit for your membership package has been reached.")

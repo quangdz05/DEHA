@@ -60,7 +60,11 @@ class ProfileSerializer(serializers.ModelSerializer):
 class TrainerSerializer(serializers.ModelSerializer):
     class Meta:
         model = Trainer
-        fields = "__all__"
+        # VĐ #11: Không expose user, email, phone ra API public
+        fields = (
+            "id", "name", "specialty", "experience_years", "bio",
+            "certifications", "session_price", "image", "status",
+        )
 
 
 class RoomSerializer(serializers.ModelSerializer):
@@ -137,6 +141,8 @@ class BookingSerializer(serializers.ModelSerializer):
     trainer_name = serializers.CharField(source="schedule.trainer.name", read_only=True)
     class_price = serializers.DecimalField(source="schedule.gym_class.price", max_digits=10, decimal_places=2, read_only=True)
     gym_class_id = serializers.IntegerField(source="schedule.gym_class_id", read_only=True)
+    # VĐ #3: booked_at is now a @property alias for created_at
+    booked_at = serializers.DateTimeField(source="created_at", read_only=True)
 
     class Meta:
         model = Booking
@@ -179,6 +185,8 @@ class TrainerBookingSerializer(serializers.ModelSerializer):
     health_notes = serializers.CharField(source="user.profile.health_notes", read_only=True)
     trainer_name = serializers.CharField(source="trainer.name", read_only=True)
     trainer_session_price = serializers.DecimalField(source="trainer.session_price", max_digits=10, decimal_places=2, read_only=True)
+    # VĐ #3: booked_at is now a @property alias for created_at
+    booked_at = serializers.DateTimeField(source="created_at", read_only=True)
 
     class Meta:
         model = TrainerBooking
@@ -224,6 +232,8 @@ class TrainerMonthlyBookingSerializer(serializers.ModelSerializer):
     health_notes = serializers.CharField(source="user.profile.health_notes", read_only=True)
     trainer_name = serializers.CharField(source="trainer.name", read_only=True)
     trainer_session_price = serializers.DecimalField(source="trainer.session_price", max_digits=10, decimal_places=2, read_only=True)
+    # VĐ #3: booked_at is now a @property alias for created_at
+    booked_at = serializers.DateTimeField(source="created_at", read_only=True)
 
     class Meta:
         model = TrainerMonthlyBooking
@@ -268,7 +278,18 @@ class TrainerMonthlyBookingSerializer(serializers.ModelSerializer):
 class MembershipPackageSerializer(serializers.ModelSerializer):
     class Meta:
         model = MembershipPackage
-        fields = "__all__"
+        fields = (
+            "id",
+            "name",
+            "description",
+            "price",
+            "duration_days",
+            "max_bookings_per_week",
+            "is_freezable",
+            "max_freeze_days",
+            "allowed_categories",
+            "status",
+        )
 
 
 class UserMembershipSerializer(serializers.ModelSerializer):
@@ -394,7 +415,11 @@ class ReviewSerializer(serializers.ModelSerializer):
 class MembershipFreezeSerializer(serializers.ModelSerializer):
     class Meta:
         model = MembershipFreeze
-        fields = "__all__"
+        # VĐ #11: Khai báo fields cụ thể
+        fields = (
+            "id", "user_membership", "start_date", "end_date",
+            "duration_days", "reason", "created_at", "updated_at",
+        )
 
 
 class InvoiceItemSerializer(serializers.ModelSerializer):

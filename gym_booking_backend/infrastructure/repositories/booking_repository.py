@@ -1,7 +1,7 @@
 from django.db.models import Q
 
-from gym_booking_backend.domain.constants import BookingStatus
-from gym_booking_backend.infrastructure.models import Booking, TrainerBooking, TrainerMonthlyBooking
+from gym_booking_backend.domain.constants import BookingStatus, PTBookingStatus
+from gym_booking_backend.infrastructure.models import Booking, TrainerBooking, TrainerMonthlyBooking, PTBooking
 
 
 ACTIVE_BOOKING_STATUSES = [BookingStatus.PENDING, BookingStatus.CONFIRMED]
@@ -26,7 +26,19 @@ def has_overlapping_booking(user, schedule):
     trainer_overlap = TrainerBooking.objects.filter(user=user, status__in=ACTIVE_BOOKING_STATUSES).filter(
         Q(start_time__lt=schedule.end_time) & Q(end_time__gt=schedule.start_time)
     ).exists()
-    return class_overlap or trainer_overlap
+    
+    booking_date = schedule.start_time.date()
+    pt_start = schedule.start_time.time()
+    pt_end = schedule.end_time.time()
+    pt_overlap = PTBooking.objects.filter(
+        user=user,
+        booking_date=booking_date,
+        status=PTBookingStatus.CONFIRMED,
+        start_time__lt=pt_end,
+        end_time__gt=pt_start,
+    ).exists()
+    
+    return class_overlap or trainer_overlap or pt_overlap
 
 
 def has_user_overlapping_time(user, start_time, end_time, trainer_booking_id=None):
@@ -40,7 +52,18 @@ def has_user_overlapping_time(user, start_time, end_time, trainer_booking_id=Non
     if trainer_booking_id:
         trainer_query = trainer_query.exclude(id=trainer_booking_id)
 
-    return class_overlap or trainer_query.exists()
+    booking_date = start_time.date()
+    pt_start = start_time.time()
+    pt_end = end_time.time()
+    pt_overlap = PTBooking.objects.filter(
+        user=user,
+        booking_date=booking_date,
+        status=PTBookingStatus.CONFIRMED,
+        start_time__lt=pt_end,
+        end_time__gt=pt_start,
+    ).exists()
+
+    return class_overlap or trainer_query.exists() or pt_overlap
 
 
 def has_trainer_overlapping_time(trainer, start_time, end_time, trainer_booking_id=None):
@@ -60,25 +83,36 @@ def has_trainer_overlapping_time(trainer, start_time, end_time, trainer_booking_
     if trainer_booking_id:
         trainer_query = trainer_query.exclude(id=trainer_booking_id)
 
-    return class_overlap or trainer_query.exists()
+    booking_date = start_time.date()
+    pt_start = start_time.time()
+    pt_end = end_time.time()
+    pt_overlap = PTBooking.objects.filter(
+        trainer=trainer,
+        booking_date=booking_date,
+        status=PTBookingStatus.CONFIRMED,
+        start_time__lt=pt_end,
+        end_time__gt=pt_start,
+    ).exists()
+
+    return class_overlap or trainer_query.exists() or pt_overlap
 
 
 def create_booking(user, schedule, booking_code, note=""):
     return Booking.objects.create(user=user, schedule=schedule, booking_code=booking_code, note=note)
 
 
-def count_user_bookings_in_week(user, start_date, end_date):
+def count_user_bookings_in_week(user, start_dt, end_dt):
     class_count = Booking.objects.filter(
         user=user,
         status__in=ACTIVE_BOOKING_STATUSES + [BookingStatus.COMPLETED],
-        schedule__start_time__date__gte=start_date,
-        schedule__start_time__date__lte=end_date,
+        schedule__start_time__gte=start_dt,
+        schedule__start_time__lte=end_dt,
     ).count()
     trainer_count = TrainerBooking.objects.filter(
         user=user,
         status__in=ACTIVE_BOOKING_STATUSES + [BookingStatus.COMPLETED],
-        start_time__date__gte=start_date,
-        start_time__date__lte=end_date,
+        start_time__gte=start_dt,
+        start_time__lte=end_dt,
     ).count()
     return class_count + trainer_count
 

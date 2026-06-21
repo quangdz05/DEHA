@@ -31,32 +31,46 @@ class ProfileAdmin(admin.ModelAdmin):
     list_filter = ("gender", "created_at")
 
 
+# VĐ #12: Thêm is_deleted vào list_filter cho các model SoftDelete
 @admin.register(Trainer)
 class TrainerAdmin(admin.ModelAdmin):
-    list_display = ("id", "name", "email", "phone", "specialty", "experience_years", "session_price", "status")
+    list_display = ("id", "name", "email", "phone", "specialty", "experience_years", "session_price", "status", "is_deleted")
     search_fields = ("name", "email", "phone", "specialty")
-    list_filter = ("status", "specialty")
+    list_filter = ("status", "specialty", "is_deleted")
+
+    def get_queryset(self, request):
+        """Hiển thị tất cả bản ghi trong Admin, kể cả đã xóa mềm."""
+        return self.model.all_objects.all()
 
 
 @admin.register(Room)
 class RoomAdmin(admin.ModelAdmin):
-    list_display = ("id", "name", "location", "capacity", "status")
+    list_display = ("id", "name", "location", "capacity", "status", "is_deleted")
     search_fields = ("name", "location")
-    list_filter = ("status",)
+    list_filter = ("status", "is_deleted")
+
+    def get_queryset(self, request):
+        return self.model.all_objects.all()
 
 
 @admin.register(Category)
 class CategoryAdmin(admin.ModelAdmin):
-    list_display = ("id", "name", "status")
+    list_display = ("id", "name", "status", "is_deleted")
     search_fields = ("name",)
-    list_filter = ("status",)
+    list_filter = ("status", "is_deleted")
+
+    def get_queryset(self, request):
+        return self.model.all_objects.all()
 
 
 @admin.register(GymClass)
 class GymClassAdmin(admin.ModelAdmin):
-    list_display = ("id", "name", "category", "trainer", "difficulty_level", "duration_minutes", "price", "status")
+    list_display = ("id", "name", "category", "trainer", "difficulty_level", "duration_minutes", "price", "status", "is_deleted")
     search_fields = ("name", "category__name", "trainer__name")
-    list_filter = ("status", "difficulty_level", "category")
+    list_filter = ("status", "difficulty_level", "category", "is_deleted")
+
+    def get_queryset(self, request):
+        return self.model.all_objects.all()
 
 
 @admin.register(ClassSchedule)
@@ -76,16 +90,17 @@ class ClassScheduleAdmin(admin.ModelAdmin):
     list_filter = ("status", "start_time", "room")
 
 
+# VĐ #3: Booking dùng created_at thay vì booked_at
 @admin.register(Booking)
 class BookingAdmin(admin.ModelAdmin):
-    list_display = ("id", "booking_code", "user", "schedule", "status", "booked_at", "cancelled_at")
+    list_display = ("id", "booking_code", "user", "schedule", "status", "created_at", "cancelled_at")
     search_fields = ("booking_code", "user__username", "schedule__gym_class__name")
-    list_filter = ("status", "booked_at")
+    list_filter = ("status", "created_at")
 
 
 @admin.register(TrainerBooking)
 class TrainerBookingAdmin(admin.ModelAdmin):
-    list_display = ("id", "booking_code", "user", "trainer", "start_time", "end_time", "status", "booked_at")
+    list_display = ("id", "booking_code", "user", "trainer", "start_time", "end_time", "status", "created_at")
     search_fields = ("booking_code", "user__username", "trainer__name")
     list_filter = ("status", "start_time", "trainer")
 
@@ -109,9 +124,12 @@ class TrainerMonthlyBookingAdmin(admin.ModelAdmin):
 
 @admin.register(MembershipPackage)
 class MembershipPackageAdmin(admin.ModelAdmin):
-    list_display = ("id", "name", "price", "duration_days", "max_bookings_per_week", "status")
+    list_display = ("id", "name", "price", "duration_days", "max_bookings_per_week", "status", "is_deleted")
     search_fields = ("name",)
-    list_filter = ("status",)
+    list_filter = ("status", "is_deleted")
+
+    def get_queryset(self, request):
+        return self.model.all_objects.all()
 
 
 @admin.register(UserMembership)
@@ -151,16 +169,19 @@ class InvoiceAdmin(admin.ModelAdmin):
 
 @admin.register(InvoiceItem)
 class InvoiceItemAdmin(admin.ModelAdmin):
-    list_display = ("id", "invoice", "item_type", "amount")
+    list_display = ("id", "invoice", "item_type", "content_type", "object_id", "amount")
     search_fields = ("invoice__invoice_number", "item_type")
     list_filter = ("item_type",)
 
 
 @admin.register(PTPackage)
 class PTPackageAdmin(admin.ModelAdmin):
-    list_display = ("id", "name", "price", "duration_days", "total_sessions", "is_active")
+    list_display = ("id", "name", "price", "duration_days", "total_sessions", "is_active", "is_deleted")
     search_fields = ("name",)
-    list_filter = ("is_active",)
+    list_filter = ("is_active", "is_deleted")
+
+    def get_queryset(self, request):
+        return self.model.all_objects.all()
 
 
 @admin.register(TrainerSchedule)
