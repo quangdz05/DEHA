@@ -29,17 +29,55 @@ const ROLE_RULES = {
 let idleTimerId = null;
 let lastActivityWriteAt = 0;
 let lastKeepAliveAt = 0;
+let accessToken = null;
 
 async function apiFetch(path, options = {}) {
   const { skipAuthRedirect = false, ...fetchOptions } = options;
-  const response = await fetch(`${API_BASE}${path}`, {
+  
+  const headers = {
+    "Content-Type": "application/json",
+    ...(fetchOptions.headers || {}),
+  };
+  
+  if (accessToken) {
+    headers["Authorization"] = `Bearer ${accessToken}`;
+  }
+
+  let response = await fetch(`${API_BASE}${path}`, {
     credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-      ...(fetchOptions.headers || {}),
-    },
+    headers,
     ...fetchOptions,
   });
+
+  // Automatically refresh access token if expired (401)
+  if (response.status === 401 && !path.includes("/auth/refresh/") && !path.includes("/auth/login/")) {
+    try {
+      const refreshResponse = await fetch(`${API_BASE}/auth/refresh/`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" }
+      });
+      if (refreshResponse.ok) {
+        const refreshData = await refreshResponse.json();
+        accessToken = refreshData.access;
+        saveUserSession(refreshData);
+        
+        // Retry request with new token
+        headers["Authorization"] = `Bearer ${accessToken}`;
+        response = await fetch(`${API_BASE}${path}`, {
+          credentials: "include",
+          headers,
+          ...fetchOptions,
+        });
+      } else {
+        handleAuthExpired();
+        throw new Error("Session expired");
+      }
+    } catch (refreshErr) {
+      handleAuthExpired();
+      throw refreshErr;
+    }
+  }
 
   const contentType = response.headers.get("content-type") || "";
   const data = contentType.includes("application/json") ? await response.json() : null;
@@ -106,11 +144,15 @@ function getStoredUser() {
 }
 
 function saveUserSession(user) {
+  if (user && user.access) {
+    accessToken = user.access;
+  }
   localStorage.setItem("gymUser", JSON.stringify(user));
   markUserActivity(true);
 }
 
 function clearUserSession() {
+  accessToken = null;
   localStorage.removeItem("gymUser");
   localStorage.removeItem(LAST_ACTIVITY_KEY);
   if (idleTimerId) {

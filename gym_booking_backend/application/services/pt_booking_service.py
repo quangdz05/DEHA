@@ -63,11 +63,11 @@ def preview_monthly_pt_bookings(user, package_id, trainer_id, start_date, select
     if start_time >= end_time:
         raise PTBookingException("Start time must be before end time.")
 
-    # Parse selected weekdays
-    if isinstance(selected_weekdays, str):
-        selected_weekdays = [int(w) for w in selected_weekdays.split(",") if w.strip() != ""]
-    elif isinstance(selected_weekdays, list):
+    # VĐ #4: selected_weekdays là JSONField, đã là list sẵn
+    if isinstance(selected_weekdays, list):
         selected_weekdays = [int(w) for w in selected_weekdays]
+    elif isinstance(selected_weekdays, str):
+        selected_weekdays = [int(w) for w in selected_weekdays.split(",") if w.strip() != ""]
     else:
         raise PTBookingException("Selected weekdays is invalid.")
 
@@ -124,10 +124,11 @@ def create_monthly_pt_bookings(user, package_id, trainer_id, start_date, selecte
     """
     Validate, purchase, and automatically generate PTBookings for the entire month.
     """
-    if isinstance(selected_weekdays, str):
-        selected_weekdays_list = [int(w) for w in selected_weekdays.split(",") if w.strip() != ""]
-    elif isinstance(selected_weekdays, list):
+    # VĐ #4: selected_weekdays là JSONField, đã là list sẵn
+    if isinstance(selected_weekdays, list):
         selected_weekdays_list = [int(wd) for wd in selected_weekdays]
+    elif isinstance(selected_weekdays, str):
+        selected_weekdays_list = [int(w) for w in selected_weekdays.split(",") if w.strip() != ""]
     else:
         raise PTBookingException("Selected weekdays is invalid.")
 
@@ -153,8 +154,8 @@ def create_monthly_pt_bookings(user, package_id, trainer_id, start_date, selecte
     package = pt_repository.get_pt_package_by_id(package_id)
     trainer = Trainer.objects.get(id=trainer_id)
 
-    # Convert week days list to comma-separated string
-    weekdays_str = ",".join(str(w) for w in selected_weekdays_list)
+    # VĐ #4: Lưu trực tiếp dưới dạng list (JSONField)
+    weekdays_list = selected_weekdays_list
 
     if isinstance(start_time, str):
         try:
@@ -178,9 +179,8 @@ def create_monthly_pt_bookings(user, package_id, trainer_id, start_date, selecte
         end_date=end_date,
         total_sessions=package.total_sessions,
         used_sessions=0,
-        remaining_sessions=package.total_sessions,
         status=UserPTPackageStatus.ACTIVE,
-        selected_weekdays=weekdays_str,
+        selected_weekdays=weekdays_list,
         start_time=start_time,
         end_time=end_time,
     )
@@ -222,10 +222,10 @@ def complete_pt_booking(booking_id):
         user_package = UserPTPackage.objects.select_for_update().filter(id=booking.user_pt_package_id).first()
         if user_package:
             user_package.used_sessions += 1
-            user_package.remaining_sessions = max(0, user_package.total_sessions - user_package.used_sessions)
+            # VĐ #14: remaining_sessions là @property, không cần save
             if user_package.remaining_sessions == 0:
                 user_package.status = UserPTPackageStatus.COMPLETED
-            user_package.save(update_fields=["used_sessions", "remaining_sessions", "status"])
+            user_package.save(update_fields=["used_sessions", "status"])
 
     return booking
 
@@ -250,10 +250,10 @@ def cancel_pt_booking(booking_id):
             user_package = UserPTPackage.objects.select_for_update().filter(id=booking.user_pt_package_id).first()
             if user_package:
                 user_package.used_sessions = max(0, user_package.used_sessions - 1)
-                user_package.remaining_sessions = user_package.total_sessions - user_package.used_sessions
+                # VĐ #14: remaining_sessions là @property, không cần save
                 if user_package.status == UserPTPackageStatus.COMPLETED:
                     user_package.status = UserPTPackageStatus.ACTIVE
-                user_package.save(update_fields=["used_sessions", "remaining_sessions", "status"])
+                user_package.save(update_fields=["used_sessions", "status"])
 
     return booking
 

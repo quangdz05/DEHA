@@ -88,10 +88,10 @@ def cancel_booking(user, booking_id, cancellation_reason=""):
 
     if was_active:
         # Find next waitlisted booking to promote
-        next_waitlist = Booking.objects.filter(
+        next_waitlist = Booking.objects.select_for_update().filter(
             schedule=schedule,
             status=BookingStatus.WAITLIST
-        ).order_by("booked_at", "id").first()
+        ).order_by("created_at", "id").first()
         
         if next_waitlist:
             next_waitlist.status = BookingStatus.PENDING

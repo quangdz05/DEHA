@@ -23,8 +23,10 @@
           <li class="nav-item"><a class="nav-link active" href="{% url 'pt_package_list' %}">Gói PT</a></li>
           
           {% if request.user.is_authenticated %}
-            <li class="nav-item"><a class="nav-link" href="/my-bookings.html">Lịch của tôi</a></li>
-            <li class="nav-item"><a class="nav-link" href="{% url 'user_pt_package_list' %}">Gói PT của tôi</a></li>
+            {% if request.user.profile.role == 'member' %}
+              <li class="nav-item"><a class="nav-link" href="/my-bookings.html">Lịch của tôi</a></li>
+              <li class="nav-item"><a class="nav-link" href="{% url 'user_pt_package_list' %}">Gói PT của tôi</a></li>
+            {% endif %}
             
             {% if request.user.profile.role == 'trainer' or request.user.profile.role == 'admin' %}
               <li class="nav-item"><a class="nav-link" href="/trainer-dashboard.html">Lịch dạy HLV</a></li>

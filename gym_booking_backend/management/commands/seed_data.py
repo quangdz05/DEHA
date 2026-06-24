@@ -28,6 +28,8 @@ from gym_booking_backend.infrastructure.models import (
     Room,
     Trainer,
     UserMembership,
+    PTPackage,
+    TrainerSchedule,
 )
 
 
@@ -74,6 +76,8 @@ class Command(BaseCommand):
         self._create_payments(memberships)
         self._create_bookings(member_1, schedules)
         self._create_reviews(member_1, member_2, trainers, classes)
+        self._create_pt_packages()
+        self._create_trainer_schedules(trainers)
         self._sync_schedule_participants()
 
         self.stdout.write(self.style.SUCCESS("Seed data created successfully."))
@@ -303,3 +307,36 @@ class Command(BaseCommand):
             count = schedule.bookings.filter(status__in=[BookingStatus.PENDING, BookingStatus.CONFIRMED]).count()
             status = ScheduleStatus.FULL if count >= schedule.max_participants else ScheduleStatus.OPEN
             ClassSchedule.objects.filter(id=schedule.id).update(current_participants=count, status=status)
+
+    def _create_pt_packages(self):
+        data = [
+            ("PT Basic 8 Sessions", "Gói tập cá nhân cơ bản 8 buổi.", Decimal("3000000.00"), 30, 8),
+            ("PT Standard 12 Sessions", "Gói tập cá nhân tiêu chuẩn 12 buổi.", Decimal("4200000.00"), 30, 12),
+            ("PT VIP 24 Sessions", "Gói tập cá nhân cao cấp 24 buổi.", Decimal("7200000.00"), 45, 24),
+        ]
+        return {
+            name: PTPackage.objects.update_or_create(
+                name=name,
+                defaults={
+                    "description": description,
+                    "price": price,
+                    "duration_days": duration_days,
+                    "total_sessions": total_sessions,
+                    "is_active": True,
+                },
+            )[0]
+            for name, description, price, duration_days, total_sessions in data
+        }
+
+    def _create_trainer_schedules(self, trainers):
+        for specialty, trainer in trainers.items():
+            for weekday in [0, 1, 2, 3, 4]: # Mon-Fri
+                TrainerSchedule.objects.update_or_create(
+                    trainer=trainer,
+                    weekday=weekday,
+                    start_time=time(8, 0),
+                    defaults={
+                        "end_time": time(20, 0),
+                        "is_available": True,
+                    }
+                )

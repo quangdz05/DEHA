@@ -1,14 +1,26 @@
 from django.urls import path
 
 from gym_booking_backend.presentation.chatbot import ChatbotAPIView
-from gym_booking_backend.presentation import views
+from gym_booking_backend.presentation import views, jwt_views, password_reset_views, two_factor_views
 
 urlpatterns = [
     path("chat", ChatbotAPIView.as_view(), name="chatbot-chat-no-slash"),
     path("chat/", ChatbotAPIView.as_view(), name="chatbot-chat"),
     path("auth/register/", views.RegisterAPIView.as_view(), name="auth-register"),
-    path("auth/login/", views.LoginAPIView.as_view(), name="auth-login"),
-    path("auth/logout/", views.LogoutAPIView.as_view(), name="auth-logout"),
+    path("auth/login/", jwt_views.LoginAPIView.as_view(), name="auth-login"),
+    path("auth/logout/", jwt_views.LogoutAPIView.as_view(), name="auth-logout"),
+    path("auth/refresh/", jwt_views.TokenRefreshAPIView.as_view(), name="auth-token-refresh"),
+    
+    # 2FA endpoints
+    path("auth/2fa/setup/", two_factor_views.TwoFactorSetupAPIView.as_view(), name="auth-2fa-setup"),
+    path("auth/2fa/enable/", two_factor_views.TwoFactorEnableAPIView.as_view(), name="auth-2fa-enable"),
+    path("auth/2fa/disable/", two_factor_views.TwoFactorDisableAPIView.as_view(), name="auth-2fa-disable"),
+    path("auth/2fa/verify/", two_factor_views.TwoFactorVerifyAPIView.as_view(), name="auth-2fa-verify"),
+    
+    # Password Reset endpoints
+    path("auth/forgot-password/", password_reset_views.ForgotPasswordAPIView.as_view(), name="auth-forgot-password"),
+    path("auth/reset-password/", password_reset_views.ResetPasswordAPIView.as_view(), name="auth-reset-password"),
+
     path("profile/me/", views.ProfileMeAPIView.as_view(), name="profile-me"),
     path("trainers/", views.TrainerListAPIView.as_view(), name="trainer-list"),
     path("trainers/<int:trainer_id>/", views.TrainerDetailAPIView.as_view(), name="trainer-detail"),

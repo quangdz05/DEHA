@@ -648,3 +648,144 @@ class PTBookingTests(APITestCase):
         self.assertEqual(PTBooking.objects.filter(user_pt_package=user_package, status="confirmed").count(), 0)
 
 
+import pyotp
+from django.core.cache import cache
+from django.core import mail
+import re
+
+class SecurityTests(APITestCase):
+    def setUp(self):
+        cache.clear()
+        self.user = User.objects.create_user(
+            username="security_user",
+            password="testpassword123",
+            email="security@test.com"
+        )
+        self.profile = Profile.objects.create(
+            user=self.user,
+            full_name="Security User",
+            role=UserRole.MEMBER
+        )
+        self.login_url = reverse("auth-login")
+        self.refresh_url = reverse("auth-token-refresh")
+        self.logout_url = reverse("auth-logout")
+        self.forgot_url = reverse("auth-forgot-password")
+        self.reset_url = reverse("auth-reset-password")
+        self.setup_2fa_url = reverse("auth-2fa-setup")
+        self.enable_2fa_url = reverse("auth-2fa-enable")
+        self.disable_2fa_url = reverse("auth-2fa-disable")
+        self.verify_2fa_url = reverse("auth-2fa-verify")
+        self.profile_url = reverse("profile-me")
+
+    def tearDown(self):
+        cache.clear()
+
+    def test_jwt_auth_lifecycle(self):
+        # 1. Login and get token
+        response = self.client.post(self.login_url, {"username": "security_user", "password": "testpassword123"}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("access", response.data)
+        self.assertIn("refresh_token", response.cookies)
+        refresh_token = response.cookies["refresh_token"].value
+
+        # 2. Access protected endpoint with Bearer token
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {response.data['access']}")
+        profile_res = self.client.get(self.profile_url)
+        self.assertEqual(profile_res.status_code, status.HTTP_200_OK)
+        self.assertEqual(profile_res.data["username"], "security_user")
+
+        # 3. Refresh token
+        self.client.credentials()  # clear auth header
+        self.client.cookies["refresh_token"] = refresh_token
+        refresh_res = self.client.post(self.refresh_url, {}, format="json")
+        self.assertEqual(refresh_res.status_code, status.HTTP_200_OK)
+        self.assertIn("access", refresh_res.data)
+
+        # 4. Logout
+        logout_res = self.client.post(self.logout_url, {}, format="json")
+        self.assertEqual(logout_res.status_code, status.HTTP_200_OK)
+        # Check that cookie is deleted
+        self.assertIn("refresh_token", logout_res.cookies)
+        self.assertEqual(logout_res.cookies["refresh_token"].value, "")
+
+    def test_login_rate_limiting(self):
+        # The throttle rate is 5/minute.
+        # Make 5 attempts
+        for _ in range(5):
+            response = self.client.post(self.login_url, {"username": "security_user", "password": "wrongpassword"}, format="json")
+            self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+        # 6th attempt should be throttled
+        response = self.client.post(self.login_url, {"username": "security_user", "password": "wrongpassword"}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+
+    def test_password_reset_flow(self):
+        # 1. Forgot password request
+        response = self.client.post(self.forgot_url, {"email": "security@test.com"}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(mail.outbox), 1)
+        email_body = mail.outbox[0].body
+
+        # Parse uid and token from link: reset-password.html?uid=...&token=...
+        match = re.search(r"uid=([^&]+)&token=([^\s\n&]+)", email_body)
+        self.assertTrue(match)
+        uid = match.group(1)
+        token = match.group(2)
+
+        # 2. Reset password using uid and token
+        reset_res = self.client.post(self.reset_url, {
+            "uid": uid,
+            "token": token,
+            "new_password": "newpassword456"
+        }, format="json")
+        self.assertEqual(reset_res.status_code, status.HTTP_200_OK)
+
+        # 3. Verify we can login with new password
+        login_res = self.client.post(self.login_url, {"username": "security_user", "password": "newpassword456"}, format="json")
+        self.assertEqual(login_res.status_code, status.HTTP_200_OK)
+
+    def test_two_factor_auth_loop(self):
+        # 1. Perform standard login to get token
+        response = self.client.post(self.login_url, {"username": "security_user", "password": "testpassword123"}, format="json")
+        access_token = response.data["access"]
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {access_token}")
+
+        # 2. Setup 2FA
+        setup_res = self.client.post(self.setup_2fa_url, {}, format="json")
+        self.assertEqual(setup_res.status_code, status.HTTP_200_OK)
+        self.assertIn("secret", setup_res.data)
+        secret = setup_res.data["secret"]
+
+        # 3. Enable 2FA with incorrect code
+        enable_res = self.client.post(self.enable_2fa_url, {"code": "000000"}, format="json")
+        self.assertEqual(enable_res.status_code, status.HTTP_400_BAD_REQUEST)
+
+        # 4. Enable 2FA with correct code
+        totp = pyotp.TOTP(secret)
+        enable_res = self.client.post(self.enable_2fa_url, {"code": totp.now()}, format="json")
+        self.assertEqual(enable_res.status_code, status.HTTP_200_OK)
+
+        # 5. Verify that regular login now requires 2FA and doesn't return token immediately
+        self.client.credentials()  # logout
+        login_res = self.client.post(self.login_url, {"username": "security_user", "password": "testpassword123"}, format="json")
+        self.assertEqual(login_res.status_code, status.HTTP_200_OK)
+        self.assertTrue(login_res.data.get("requires_2fa"))
+        user_id = login_res.data.get("user_id")
+
+        # 6. Verify 2FA with incorrect code
+        verify_res = self.client.post(self.verify_2fa_url, {"user_id": user_id, "code": "000000"}, format="json")
+        self.assertEqual(verify_res.status_code, status.HTTP_400_BAD_REQUEST)
+
+        # 7. Verify 2FA with correct code
+        verify_res = self.client.post(self.verify_2fa_url, {"user_id": user_id, "code": totp.now()}, format="json")
+        self.assertEqual(verify_res.status_code, status.HTTP_200_OK)
+        self.assertIn("access", verify_res.data)
+        new_access_token = verify_res.data["access"]
+
+        # 8. Disable 2FA with correct code
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {new_access_token}")
+        disable_res = self.client.post(self.disable_2fa_url, {"code": totp.now()}, format="json")
+        self.assertEqual(disable_res.status_code, status.HTTP_200_OK)
+
+
+

@@ -205,10 +205,7 @@
       if (cb.checked) {
         wrapper.classList.add("active");
       }
-      wrapper.addEventListener("click", function (e) {
-        if (e.target !== cb) {
-          cb.checked = !cb.checked;
-        }
+      cb.addEventListener("change", function () {
         wrapper.classList.toggle("active", cb.checked);
         triggerPreview();
       });
