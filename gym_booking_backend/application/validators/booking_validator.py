@@ -30,23 +30,34 @@ def validate_schedule_not_started(schedule):
         raise ScheduleAlreadyStartedException("Schedule has already started.")
 
 
-def validate_user_has_active_membership(user):
-    if not membership_repository.has_active_membership(user):
+def validate_user_has_active_membership(user, membership_repo=None):
+    if membership_repo is None:
+        from gym_booking_backend.infrastructure.repositories import membership_repository as membership_repo
+    if not membership_repo.has_active_membership(user):
         raise MembershipRequiredException("You need an active membership to book a class.")
 
 
-def validate_user_not_duplicate_booking(user, schedule):
-    if booking_repository.has_duplicate_booking(user, schedule):
+def validate_user_not_duplicate_booking(user, schedule, booking_repo=None):
+    if booking_repo is None:
+        from gym_booking_backend.infrastructure.repositories import booking_repository as booking_repo
+    if booking_repo.has_duplicate_booking(user, schedule):
         raise DuplicateBookingException("You already booked this schedule.")
 
 
-def validate_user_not_overlap_booking(user, schedule):
-    if booking_repository.has_overlapping_booking(user, schedule):
+def validate_user_not_overlap_booking(user, schedule, booking_repo=None):
+    if booking_repo is None:
+        from gym_booking_backend.infrastructure.repositories import booking_repository as booking_repo
+    if booking_repo.has_overlapping_booking(user, schedule):
         raise OverlapBookingException("You already have another booking in this time range.")
 
 
-def validate_weekly_booking_limit(user, schedule=None, start_time=None):
-    membership = membership_repository.get_active_membership(user)
+def validate_weekly_booking_limit(user, schedule=None, start_time=None, membership_repo=None, booking_repo=None):
+    if membership_repo is None:
+        from gym_booking_backend.infrastructure.repositories import membership_repository as membership_repo
+    if booking_repo is None:
+        from gym_booking_backend.infrastructure.repositories import booking_repository as booking_repo
+
+    membership = membership_repo.get_active_membership(user)
     if not membership:
         raise MembershipRequiredException("You need an active membership to book a class.")
 
@@ -73,13 +84,15 @@ def validate_weekly_booking_limit(user, schedule=None, start_time=None):
         timezone.get_current_timezone()
     )
 
-    current_count = booking_repository.count_user_bookings_in_week(user, week_start, week_end)
+    current_count = booking_repo.count_user_bookings_in_week(user, week_start, week_end)
     if current_count >= limit:
         raise MembershipRequiredException("Weekly booking limit for your membership package has been reached.")
 
 
-def validate_membership_category_access(user, schedule):
-    membership = membership_repository.get_active_membership(user)
+def validate_membership_category_access(user, schedule, membership_repo=None):
+    if membership_repo is None:
+        from gym_booking_backend.infrastructure.repositories import membership_repository as membership_repo
+    membership = membership_repo.get_active_membership(user)
     if not membership:
         raise MembershipRequiredException("You need an active membership to book a class.")
     

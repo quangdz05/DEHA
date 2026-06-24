@@ -788,4 +788,143 @@ class SecurityTests(APITestCase):
         self.assertEqual(disable_res.status_code, status.HTTP_200_OK)
 
 
+from gym_booking_backend.application.interfaces import IBookingRepository, IScheduleRepository, ITrainerRepository
+from gym_booking_backend.application.services.booking_service import BookingService
+
+class MockBookingRepository(IBookingRepository):
+    def __init__(self):
+        self.create_booking_called = False
+        self.booking_code = None
+
+    def get_booking_by_id(self, booking_id):
+        return None
+    def get_next_waitlisted_booking(self, schedule_id, select_for_update=False):
+        return None
+    def get_user_bookings(self, user):
+        return []
+    def has_duplicate_booking(self, user, schedule):
+        return False
+    def has_overlapping_booking(self, user, schedule):
+        return False
+    def has_user_overlapping_time(self, user, start_time, end_time, trainer_booking_id=None):
+        return False
+    def has_trainer_overlapping_time(self, trainer, start_time, end_time, trainer_booking_id=None):
+        return False
+    def create_booking(self, user, schedule, booking_code, note="", status=None):
+        self.create_booking_called = True
+        self.booking_code = booking_code
+        class FakeBooking:
+            pass
+        b = FakeBooking()
+        b.id = 999
+        b.status = status or 'pending'
+        b.booking_code = booking_code
+        return b
+    def count_user_bookings_in_week(self, user, start_dt, end_dt):
+        return 0
+    def get_user_trainer_bookings(self, user):
+        return []
+    def get_trainer_personal_bookings(self, trainer):
+        return []
+    def get_trainer_booking_by_id(self, booking_id):
+        return None
+    def create_trainer_booking(self, user, trainer, booking_code, start_time, end_time, note=""):
+        return None
+    def get_user_trainer_monthly_bookings(self, user):
+        return []
+    def get_trainer_monthly_bookings(self, trainer):
+        return []
+    def get_all_trainer_monthly_bookings(self):
+        return []
+    def get_trainer_monthly_booking_by_id(self, booking_id):
+        return None
+    def has_overlapping_monthly_booking(self, user, trainer, start_date, end_date, booking_id=None):
+        return False
+    def create_trainer_monthly_booking(self, user, trainer, booking_code, start_date, end_date, months, sessions_per_week, preferred_time=None, note=""):
+        return None
+    def has_completed_booking_for_trainer(self, user, trainer_id):
+        return False
+    def has_completed_booking_for_class(self, user, gym_class_id):
+        return False
+
+class MockScheduleRepository(IScheduleRepository):
+    def get_schedule_by_id(self, schedule_id, select_for_update=False):
+        class FakeClass:
+            category_id = 1
+        class FakeSchedule:
+            id = 1
+            status = 'open'
+            current_participants = 0
+            max_participants = 10
+            start_time = timezone.now() + timedelta(days=1)
+            end_time = timezone.now() + timedelta(days=1, hours=1)
+            gym_class = FakeClass()
+            def save(self, *args, **kwargs):
+                pass
+        return FakeSchedule()
+    def get_available_schedules(self): return []
+    def get_all_schedules(self): return []
+    def get_schedules_by_date(self, date): return []
+    def get_schedules_by_trainer(self, trainer_id): return []
+    def get_schedules_with_available_slots(self): return []
+    def has_room_conflict(self, room, start_time, end_time, exclude_id=None): return False
+    def has_trainer_conflict(self, trainer, start_time, end_time, exclude_id=None): return False
+
+class MockTrainerRepository(ITrainerRepository):
+    def get_all_trainers(self): return []
+    def get_active_trainers(self): return []
+    def get_trainer_by_id(self, trainer_id, select_for_update=False): return None
+    def get_trainer_by_user(self, user): return None
+    def create_trainer(self, user, name, email, phone="", specialty="General Trainer", experience_years=1): return None
+
+from gym_booking_backend.application.interfaces import IMembershipRepository
+
+class MockMembershipRepository(IMembershipRepository):
+    def get_package_by_id(self, package_id): return None
+    def get_active_packages(self): return []
+    def get_active_membership(self, user):
+        from gym_booking_backend.infrastructure.models import UserMembership
+        return UserMembership.objects.filter(user=user, status="active").first()
+    def has_active_membership(self, user): return True
+    def create_user_membership(self, user, package, start_date, end_date): return None
+    def get_user_membership_by_id(self, user, membership_id): return None
+    def get_user_memberships(self, user): return []
+    def expire_memberships_before(self, date): return 0
+    def has_active_or_pending_membership(self, user): return False
+
+class DependencyInjectionTests(APITestCase):
+    def test_booking_service_uses_injected_repository(self):
+        mock_booking_repo = MockBookingRepository()
+        mock_schedule_repo = MockScheduleRepository()
+        mock_trainer_repo = MockTrainerRepository()
+        mock_membership_repo = MockMembershipRepository()
+
+        # Instantiate BookingService with mock repositories
+        service = BookingService(
+            booking_repo=mock_booking_repo,
+            schedule_repo=mock_schedule_repo,
+            trainer_repo=mock_trainer_repo,
+            membership_repo=mock_membership_repo
+        )
+
+        # Set up a dummy user and membership to bypass service-level validations
+        user = User.objects.create_user(username="di_test_user", password="password")
+        from gym_booking_backend.infrastructure.models import MembershipPackage, UserMembership
+        package = MembershipPackage.objects.create(name="DI Package", price=0, duration_days=30)
+        UserMembership.objects.create(
+            user=user,
+            package=package,
+            start_date=timezone.now().date(),
+            end_date=(timezone.now() + timedelta(days=30)).date(),
+            status="active"
+        )
+
+        res = service.create_booking(user, schedule_id=1, note="DI Mock Note")
+
+        self.assertTrue(mock_booking_repo.create_booking_called)
+        self.assertEqual(res.id, 999)
+        self.assertEqual(res.status, 'pending')
+
+
+
 

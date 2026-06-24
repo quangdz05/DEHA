@@ -13,6 +13,8 @@ const PUBLIC_PAGES = new Set([
   "trainers.html",
   "packages.html",
   "schedules.html",
+  "forgot-password.html",
+  "reset-password.html",
 ]);
 
 const PROTECTED_PAGES = new Set([
@@ -30,6 +32,7 @@ let idleTimerId = null;
 let lastActivityWriteAt = 0;
 let lastKeepAliveAt = 0;
 let accessToken = null;
+let isRefreshing = null; // Global promise for refresh token locking
 
 async function apiFetch(path, options = {}) {
   const { skipAuthRedirect = false, ...fetchOptions } = options;
@@ -39,6 +42,15 @@ async function apiFetch(path, options = {}) {
     ...(fetchOptions.headers || {}),
   };
   
+  // Wait if refresh is already in progress
+  if (isRefreshing) {
+    try {
+      await isRefreshing;
+    } catch (_) {
+      // Ignore refresh errors here, retry will handle it
+    }
+  }
+
   if (accessToken) {
     headers["Authorization"] = `Bearer ${accessToken}`;
   }
@@ -51,31 +63,47 @@ async function apiFetch(path, options = {}) {
 
   // Automatically refresh access token if expired (401)
   if (response.status === 401 && !path.includes("/auth/refresh/") && !path.includes("/auth/login/")) {
+    if (!isRefreshing) {
+      isRefreshing = (async () => {
+        try {
+          const refreshResponse = await fetch(`${API_BASE}/auth/refresh/`, {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" }
+          });
+          if (refreshResponse.ok) {
+            const refreshData = await refreshResponse.json();
+            accessToken = refreshData.access;
+            saveUserSession(refreshData);
+          } else {
+            handleAuthExpired();
+            throw new Error("Session expired");
+          }
+        } catch (refreshErr) {
+          handleAuthExpired();
+          throw refreshErr;
+        } finally {
+          isRefreshing = null;
+        }
+      })();
+    }
+
     try {
-      const refreshResponse = await fetch(`${API_BASE}/auth/refresh/`, {
-        method: "POST",
+      // Wait for the active refresh to complete
+      await isRefreshing;
+      
+      // Retry request with new token
+      headers["Authorization"] = `Bearer ${accessToken}`;
+      response = await fetch(`${API_BASE}${path}`, {
         credentials: "include",
-        headers: { "Content-Type": "application/json" }
+        headers,
+        ...fetchOptions,
       });
-      if (refreshResponse.ok) {
-        const refreshData = await refreshResponse.json();
-        accessToken = refreshData.access;
-        saveUserSession(refreshData);
-        
-        // Retry request with new token
-        headers["Authorization"] = `Bearer ${accessToken}`;
-        response = await fetch(`${API_BASE}${path}`, {
-          credentials: "include",
-          headers,
-          ...fetchOptions,
-        });
-      } else {
+    } catch (err) {
+      if (!skipAuthRedirect) {
         handleAuthExpired();
-        throw new Error("Session expired");
       }
-    } catch (refreshErr) {
-      handleAuthExpired();
-      throw refreshErr;
+      throw err;
     }
   }
 
@@ -131,6 +159,10 @@ function getCurrentPage() {
 }
 
 function isProtectedPage(page = getCurrentPage()) {
+  const p = page.toLowerCase();
+  if (p.includes("forgot-password") || p.includes("reset-password") || p.includes("login") || p.includes("register")) {
+    return false;
+  }
   return PROTECTED_PAGES.has(page) || !PUBLIC_PAGES.has(page);
 }
 

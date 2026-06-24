@@ -5,7 +5,6 @@ from rest_framework.views import APIView
 
 from gym_booking_backend.application.services import (
     auth_service,
-    booking_service,
     catalog_service,
     membership_service,
     payment_service,
@@ -13,6 +12,8 @@ from gym_booking_backend.application.services import (
     review_service,
     schedule_service,
 )
+from gym_booking_backend.config.container import container
+booking_service = container.booking_service
 from gym_booking_backend.application.use_cases import (
     cancel_booking,
     create_booking,

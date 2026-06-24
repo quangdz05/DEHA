@@ -1,20 +1,26 @@
 from django.contrib.auth.models import User
+from gym_booking_backend.application.interfaces import IUserRepository
 
 
-def get_user_by_id(user_id):
-    return User.objects.filter(id=user_id).first()
+class DjangoUserRepository(IUserRepository):
+    def get_user_by_id(self, user_id):
+        return User.objects.filter(id=user_id).first()
+
+    def get_user_by_username(self, username):
+        return User.objects.filter(username=username).first()
+
+    def create_user(self, username, email, password, first_name="", last_name=""):
+        return User.objects.create_user(
+            username=username,
+            email=email,
+            password=password,
+            first_name=first_name,
+            last_name=last_name,
+        )
 
 
-def get_user_by_username(username):
-    return User.objects.filter(username=username).first()
-
-
-def create_user(username, email, password, first_name="", last_name=""):
-    return User.objects.create_user(
-        username=username,
-        email=email,
-        password=password,
-        first_name=first_name,
-        last_name=last_name,
-    )
-
+# Backward compatibility exports
+_instance = DjangoUserRepository()
+get_user_by_id = _instance.get_user_by_id
+get_user_by_username = _instance.get_user_by_username
+create_user = _instance.create_user
