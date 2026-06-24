@@ -79,6 +79,8 @@ class Profile(TimestampedModel):
     emergency_contact_phone = models.CharField(max_length=20, blank=True)
     health_notes = models.TextField(blank=True)
     fitness_goals = models.TextField(blank=True)
+    two_factor_secret = models.CharField(max_length=32, blank=True, default="")
+    two_factor_enabled = models.BooleanField(default=False)
 
     class Meta:
         ordering = ["full_name", "id"]

@@ -662,6 +662,19 @@ async function loadMyBookings() {
         </tr>
       `;
     }).join("") : `<tr><td colspan="5" class="text-center text-muted">${english ? "No bookings found." : "Chua co lich tap nao."}</td></tr>`;
+
+    // Load 2FA configurations if element exists on the page
+    const card2fa = document.getElementById("twoFactorSettingsCard");
+    const status2fa = document.getElementById("twoFactorStatusSection");
+    if (card2fa && status2fa) {
+      card2fa.classList.remove("d-none");
+      try {
+        const profile = await apiFetch("/profile/me/");
+        render2FASettings(profile);
+      } catch (err) {
+        status2fa.innerHTML = `<p class="text-danger">Không thể tải thông tin 2FA: ${err.message}</p>`;
+      }
+    }
   } catch (error) {
     showAlert(english ? "Please log in to view your bookings." : "Ban can dang nhap de xem lich.", "warning");
   }
@@ -678,7 +691,15 @@ async function handleLogin(event) {
         password: form.password.value,
       }),
     });
-    localStorage.setItem("gymUser", JSON.stringify(user));
+    
+    if (user.requires_2fa) {
+      document.getElementById("loginFormSection").classList.add("d-none");
+      document.getElementById("twoFactorUserId").value = user.user_id;
+      document.getElementById("twoFactorSection").classList.remove("d-none");
+      return;
+    }
+
+    saveUserSession(user);
     if (typeof markUserActivity === "function") {
       markUserActivity(true);
     }
@@ -697,6 +718,176 @@ async function handleLogin(event) {
     showAlert(error.message, "danger");
   }
 }
+
+async function handle2FAVerify(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const user_id = document.getElementById("twoFactorUserId").value;
+  const code = form.code.value;
+  try {
+    const user = await apiFetch("/auth/2fa/verify/", {
+      method: "POST",
+      body: JSON.stringify({ user_id, code })
+    });
+    
+    saveUserSession(user);
+    if (typeof markUserActivity === "function") {
+      markUserActivity(true);
+    }
+
+    const next = new URLSearchParams(location.search).get("next");
+    if (next) {
+      location.href = next;
+    } else if (user.role === "admin") {
+      location.href = "admin-dashboard.html";
+    } else if (user.role === "trainer") {
+      location.href = "trainer-dashboard.html";
+    } else {
+      location.href = "index.html";
+    }
+  } catch (error) {
+    showAlert(error.message, "danger");
+  }
+}
+
+function cancel2FA(event) {
+  event.preventDefault();
+  document.getElementById("twoFactorSection").classList.add("d-none");
+  document.getElementById("loginFormSection").classList.remove("d-none");
+}
+
+// 2FA Dashboard UI Functions
+function render2FASettings(profile) {
+  const status2fa = document.getElementById("twoFactorStatusSection");
+  if (!status2fa) return;
+
+  if (profile.two_factor_enabled) {
+    status2fa.innerHTML = `
+      <div class="d-flex align-items-center justify-content-between alert alert-success p-3 mb-0">
+        <div>
+          <strong class="text-success"><i class="bi bi-patch-check-fill me-2"></i>Đã kích hoạt bảo mật 2 lớp (2FA)</strong>
+          <p class="mb-0 text-muted small mt-1">Tài khoản của bạn đang được bảo vệ an toàn bằng ứng dụng xác thực.</p>
+        </div>
+        <button class="btn btn-outline-danger btn-sm" onclick="showDisable2FA()">Hủy kích hoạt</button>
+      </div>
+    `;
+  } else {
+    status2fa.innerHTML = `
+      <div class="d-flex align-items-center justify-content-between alert alert-warning p-3 mb-0">
+        <div>
+          <strong class="text-warning"><i class="bi bi-exclamation-triangle-fill me-2"></i>Chưa kích hoạt bảo mật 2 lớp (2FA)</strong>
+          <p class="mb-0 text-muted small mt-1">Khuyên bạn nên kích hoạt 2FA để tránh bị xâm nhập tài khoản.</p>
+        </div>
+        <button class="btn btn-brand btn-sm" onclick="setup2FA()">Kích hoạt ngay</button>
+      </div>
+    `;
+  }
+}
+
+async function setup2FA() {
+  const status2fa = document.getElementById("twoFactorStatusSection");
+  if (!status2fa) return;
+  status2fa.innerHTML = `<div class="text-center p-3"><span class="spinner-border spinner-border-sm text-brand me-2"></span>Đang khởi tạo mã 2FA bí mật...</div>`;
+  try {
+    const data = await apiFetch("/auth/2fa/setup/", { method: "POST" });
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(data.provisioning_uri)}`;
+    status2fa.innerHTML = `
+      <div class="p-3 border rounded-3 bg-light">
+        <h5 class="fw-bold mb-3">Cấu hình bảo mật 2 lớp (2FA)</h5>
+        <ol class="small text-muted mb-3 ps-3">
+          <li class="mb-2">Sử dụng ứng dụng Google Authenticator hoặc Microsoft Authenticator trên điện thoại để quét mã QR dưới đây.</li>
+          <li class="mb-2">Hoặc nhập mã khóa thủ công nếu không thể quét QR: <code class="bg-white px-2 py-1 border rounded text-dark fw-bold d-inline-block mt-1">${data.secret}</code></li>
+          <li class="mb-2">Nhập mã xác thực 6 chữ số hiển thị trên ứng dụng vào ô dưới đây để hoàn tất kích hoạt.</li>
+        </ol>
+        <div class="text-center mb-3">
+          <img src="${qrUrl}" alt="QR Code 2FA" class="img-thumbnail" style="width: 180px; height: 180px;">
+        </div>
+        <form onsubmit="enable2FA(event)">
+          <div class="mb-3">
+            <label class="form-label fw-bold small">Mã xác thực OTP (6 chữ số)</label>
+            <input type="text" class="form-control text-center fs-5" name="code" pattern="\\d{6}" maxlength="6" placeholder="000000" required autocomplete="off">
+          </div>
+          <div class="d-flex gap-2">
+            <button type="button" class="btn btn-outline-secondary w-50" onclick="reload2FASettings()">Hủy</button>
+            <button type="submit" class="btn btn-brand w-50">Kích hoạt</button>
+          </div>
+        </form>
+      </div>
+    `;
+  } catch (err) {
+    showAlert("Không thể cấu hình 2FA: " + err.message, "danger");
+    reload2FASettings();
+  }
+}
+
+async function enable2FA(event) {
+  event.preventDefault();
+  const form = event.target;
+  const code = form.code.value;
+  try {
+    await apiFetch("/auth/2fa/enable/", {
+      method: "POST",
+      body: JSON.stringify({ code })
+    });
+    showAlert("Đã kích hoạt bảo mật 2 lớp thành công.");
+    reload2FASettings();
+  } catch (err) {
+    showAlert("Kích hoạt thất bại: " + err.message, "danger");
+  }
+}
+
+function showDisable2FA() {
+  const status2fa = document.getElementById("twoFactorStatusSection");
+  if (!status2fa) return;
+  status2fa.innerHTML = `
+    <div class="p-3 border rounded-3 bg-light">
+      <h5 class="fw-bold mb-3 text-danger">Hủy kích hoạt bảo mật 2 lớp</h5>
+      <p class="text-muted small mb-3">Nhập mã xác thực OTP 6 số hiện tại để xác nhận hủy kích hoạt 2FA.</p>
+      <form onsubmit="disable2FA(event)">
+        <div class="mb-3">
+          <label class="form-label fw-bold small">Mã xác thực OTP (6 chữ số)</label>
+          <input type="text" class="form-control text-center fs-5" name="code" pattern="\\d{6}" maxlength="6" placeholder="000000" required autocomplete="off">
+        </div>
+        <div class="d-flex gap-2">
+          <button type="button" class="btn btn-outline-secondary w-50" onclick="reload2FASettings()">Hủy</button>
+          <button type="submit" class="btn btn-danger w-50">Xác nhận hủy</button>
+        </div>
+      </form>
+    </div>
+  `;
+}
+
+async function disable2FA(event) {
+  event.preventDefault();
+  const form = event.target;
+  const code = form.code.value;
+  try {
+    await apiFetch("/auth/2fa/disable/", {
+      method: "POST",
+      body: JSON.stringify({ code })
+    });
+    showAlert("Đã tắt bảo mật 2 lớp thành công.");
+    reload2FASettings();
+  } catch (err) {
+    showAlert("Tắt 2FA thất bại: " + err.message, "danger");
+  }
+}
+
+async function reload2FASettings() {
+  try {
+    const profile = await apiFetch("/profile/me/");
+    render2FASettings(profile);
+  } catch (err) {
+    console.error("Lỗi khi tải cấu hình 2FA:", err);
+  }
+}
+
+window.cancel2FA = cancel2FA;
+window.setup2FA = setup2FA;
+window.showDisable2FA = showDisable2FA;
+window.enable2FA = enable2FA;
+window.disable2FA = disable2FA;
+window.reload2FASettings = reload2FASettings;
 
 async function handleRegister(event) {
   event.preventDefault();
