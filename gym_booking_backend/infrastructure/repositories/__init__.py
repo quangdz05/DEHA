@@ -1,1 +1,10 @@
-
+from .booking_repository import booking_repository
+from .class_repository import class_repository
+from .membership_repository import membership_repository
+from .payment_repository import payment_repository
+from .profile_repository import profile_repository
+from .pt_repository import pt_repository
+from .review_repository import review_repository
+from .schedule_repository import schedule_repository
+from .trainer_repository import trainer_repository
+from .user_repository import user_repository

@@ -5,7 +5,9 @@ from pathlib import Path
 from rest_framework import status
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
-from rest_framework.views import APIView
+
+from gym_booking_backend.domain.result import Result
+from gym_booking_backend.presentation.views import BaseAPIView
 
 try:
     from dotenv import load_dotenv
@@ -96,7 +98,7 @@ Hay tra loi truc tiep cho khach. Neu can hoi them thong tin de tu van dung hon, 
     return system_instruction, prompt
 
 
-class ChatbotAPIView(APIView):
+class ChatbotAPIView(BaseAPIView):
     """API POST /api/chat/ de frontend gui cau hoi va nhan cau tra loi tu Gemini."""
 
     permission_classes = [AllowAny]
@@ -107,37 +109,25 @@ class ChatbotAPIView(APIView):
         history = request.data.get("history", [])
 
         if not message:
-            return Response(
-                {"detail": "message khong duoc de trong"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            return self.handle_result(Result.failure_result("message khong duoc de trong", status_code=400))
 
         if user_type not in VALID_USER_TYPES:
-            return Response(
-                {"detail": "user_type khong hop le. Gia tri hop le: Giam_Can, Tang_Co, Van_Phong"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            return self.handle_result(Result.failure_result("user_type khong hop le. Gia tri hop le: Giam_Can, Tang_Co, Van_Phong", status_code=400))
 
         api_key = os.getenv("GEMINI_API_KEY")
         if not api_key:
-            return Response(
-                {"detail": "Server thieu GEMINI_API_KEY. Hay tao file .env trong gym_booking_backend."},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+            return self.handle_result(Result.failure_result("Server thieu GEMINI_API_KEY. Hay tao file .env trong gym_booking_backend.", status_code=500))
 
         try:
             from google import genai
             from google.genai import types
         except ImportError:
-            return Response(
-                {"detail": "Server chua cai google-genai. Hay chay: pip install google-genai python-dotenv"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+            return self.handle_result(Result.failure_result("Server chua cai google-genai. Hay chay: pip install google-genai python-dotenv", status_code=500))
 
         try:
             knowledge = load_knowledge()
         except RuntimeError as exc:
-            return Response({"detail": str(exc)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return self.handle_result(Result.failure_result(str(exc), status_code=500))
 
         system_instruction, prompt = build_prompt(message, user_type, history, knowledge)
 
@@ -152,16 +142,10 @@ class ChatbotAPIView(APIView):
                 ),
             )
         except Exception:
-            return Response(
-                {"detail": "Khong goi duoc Gemini API. Vui long thu lai sau."},
-                status=status.HTTP_502_BAD_GATEWAY,
-            )
+            return self.handle_result(Result.failure_result("Khong goi duoc Gemini API. Vui long thu lai sau.", status_code=502))
 
         reply = (gemini_response.text or "").strip()
         if not reply:
-            return Response(
-                {"detail": "Gemini API khong tra ve noi dung phu hop."},
-                status=status.HTTP_502_BAD_GATEWAY,
-            )
+            return self.handle_result(Result.failure_result("Gemini API khong tra ve noi dung phu hop.", status_code=502))
 
-        return Response({"reply": reply})
+        return self.handle_result(Result.success_result({"reply": reply}, status_code=200))

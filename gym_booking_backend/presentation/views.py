@@ -2,6 +2,23 @@ from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from gym_booking_backend.domain.result import Result
+
+class BaseAPIView(APIView):
+    def handle_result(self, result: Result, serializer_class=None, many=False, context=None) -> Response:
+        if not result.success:
+            return Response({"message": result.message}, status=result.status_code)
+        
+        if serializer_class and result.data is not None:
+            ctx = context or {"request": self.request}
+            serialized_data = serializer_class(result.data, many=many, context=ctx).data
+            return Response(serialized_data, status=result.status_code)
+        
+        if isinstance(result.data, dict) or isinstance(result.data, list):
+            return Response(result.data, status=result.status_code)
+            
+        return Response({"message": result.message}, status=result.status_code)
+
 
 from gym_booking_backend.application.services import (
     auth_service,
@@ -44,25 +61,25 @@ def error_response(exc, status_code=status.HTTP_400_BAD_REQUEST):
     return Response({"message": str(exc)}, status=status_code)
 
 
-class RegisterAPIView(APIView):
+class RegisterAPIView(BaseAPIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
         serializer = UserRegisterSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
-        try:
-            user = register_user.execute(
-                username=data["username"],
-                email=data.get("email", ""),
-                password=data["password"],
-                first_name=data.get("first_name", ""),
-                last_name=data.get("last_name", ""),
-                role=data.get("role", "member"),
-            )
-        except GymException as exc:
-            return error_response(exc)
+        result = register_user.execute(
+            username=data["username"],
+            email=data.get("email", ""),
+            password=data["password"],
+            first_name=data.get("first_name", ""),
+            last_name=data.get("last_name", ""),
+            role=data.get("role", "member"),
+        )
+        if not result.success:
+            return self.handle_result(result)
         
+        user = result.data
         role = "member"
         if hasattr(user, "profile"):
             role = user.profile.role
@@ -73,19 +90,19 @@ class RegisterAPIView(APIView):
         )
 
 
-class LoginAPIView(APIView):
+class LoginAPIView(BaseAPIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        try:
-            user = auth_service.login_user(
-                request,
-                request.data.get("username", ""),
-                request.data.get("password", ""),
-            )
-        except GymException as exc:
-            return error_response(exc)
+        result = auth_service.login_user(
+            request,
+            request.data.get("username", ""),
+            request.data.get("password", ""),
+        )
+        if not result.success:
+            return self.handle_result(result)
 
+        user = result.data
         from gym_booking_backend.domain.constants import UserRole
         from gym_booking_backend.infrastructure.models import Profile
         profile, created = Profile.objects.get_or_create(
@@ -106,53 +123,53 @@ class LoginAPIView(APIView):
         })
 
 
-class LogoutAPIView(APIView):
+class LogoutAPIView(BaseAPIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        auth_service.logout_user(request)
-        return Response({"message": "Logged out successfully."})
+        result = auth_service.logout_user(request)
+        return self.handle_result(result)
 
 
-class ProfileMeAPIView(APIView):
+class ProfileMeAPIView(BaseAPIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        profile = profile_service.get_my_profile(request.user)
-        return Response(ProfileSerializer(profile, context={"request": request}).data)
+        result = profile_service.get_my_profile(request.user)
+        return self.handle_result(result, ProfileSerializer)
 
     def put(self, request):
         serializer = ProfileSerializer(data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
-        profile = update_profile.execute(request.user, serializer.validated_data)
-        return Response(ProfileSerializer(profile, context={"request": request}).data)
+        result = update_profile.execute(request.user, serializer.validated_data)
+        return self.handle_result(result, ProfileSerializer)
 
 
-class TrainerListAPIView(APIView):
+class TrainerListAPIView(BaseAPIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
-        return Response(TrainerSerializer(catalog_service.get_trainers(), many=True, context={"request": request}).data)
+        result = catalog_service.get_trainers()
+        return self.handle_result(result, TrainerSerializer, many=True)
 
 
-class TrainerDetailAPIView(APIView):
+class TrainerDetailAPIView(BaseAPIView):
     permission_classes = [AllowAny]
 
     def get(self, request, trainer_id):
-        trainer = catalog_service.get_trainer(trainer_id)
-        if not trainer:
-            return error_response("Trainer not found.", status.HTTP_404_NOT_FOUND)
-        return Response(TrainerSerializer(trainer, context={"request": request}).data)
+        result = catalog_service.get_trainer(trainer_id)
+        return self.handle_result(result, TrainerSerializer)
 
 
-class CategoryListAPIView(APIView):
+class CategoryListAPIView(BaseAPIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
-        return Response(CategorySerializer(catalog_service.get_categories(), many=True, context={"request": request}).data)
+        result = catalog_service.get_categories()
+        return self.handle_result(result, CategorySerializer, many=True)
 
 
-class RoomListAPIView(APIView):
+class RoomListAPIView(BaseAPIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
@@ -161,238 +178,201 @@ class RoomListAPIView(APIView):
         return Response(RoomSerializer(Room.objects.all(), many=True).data)
 
 
-class GymClassListAPIView(APIView):
+class GymClassListAPIView(BaseAPIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
-        classes = catalog_service.get_classes(
+        result = catalog_service.get_classes(
             category_id=request.query_params.get("category"),
             trainer_id=request.query_params.get("trainer"),
         )
-        return Response(GymClassSerializer(classes, many=True, context={"request": request}).data)
+        return self.handle_result(result, GymClassSerializer, many=True)
 
 
-class GymClassDetailAPIView(APIView):
+class GymClassDetailAPIView(BaseAPIView):
     permission_classes = [AllowAny]
 
     def get(self, request, class_id):
-        gym_class = catalog_service.get_class(class_id)
-        if not gym_class:
-            return error_response("Class not found.", status.HTTP_404_NOT_FOUND)
-        return Response(GymClassSerializer(gym_class, context={"request": request}).data)
+        result = catalog_service.get_class(class_id)
+        return self.handle_result(result, GymClassSerializer)
 
 
-class ScheduleListAPIView(APIView):
+class ScheduleListAPIView(BaseAPIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
-        try:
-            schedules = schedule_service.get_schedules(
-                date=request.query_params.get("date"),
-                trainer_id=request.query_params.get("trainer"),
-                available=request.query_params.get("available") == "true",
-            )
-        except GymException as exc:
-            return error_response(exc)
-        return Response(ClassScheduleSerializer(schedules, many=True, context={"request": request}).data)
+        result = schedule_service.get_schedules(
+            date=request.query_params.get("date"),
+            trainer_id=request.query_params.get("trainer"),
+            available=request.query_params.get("available") == "true",
+        )
+        return self.handle_result(result, ClassScheduleSerializer, many=True)
 
 
-class ScheduleDetailAPIView(APIView):
+class ScheduleDetailAPIView(BaseAPIView):
     permission_classes = [AllowAny]
 
     def get(self, request, schedule_id):
-        schedule = schedule_service.get_schedule(schedule_id)
-        if not schedule:
-            return error_response("Schedule not found.", status.HTTP_404_NOT_FOUND)
-        return Response(ClassScheduleSerializer(schedule, context={"request": request}).data)
+        result = schedule_service.get_schedule(schedule_id)
+        return self.handle_result(result, ClassScheduleSerializer)
 
 
-class BookingCreateAPIView(APIView):
+class BookingCreateAPIView(BaseAPIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
         serializer = BookingSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        try:
-            booking = create_booking.execute(
-                request.user,
-                serializer.validated_data["schedule"].id,
-                serializer.validated_data.get("note", ""),
-            )
-        except GymException as exc:
-            return error_response(exc)
-        return Response(BookingSerializer(booking, context={"request": request}).data, status=status.HTTP_201_CREATED)
+        result = create_booking.execute(
+            request.user,
+            serializer.validated_data["schedule"].id,
+            serializer.validated_data.get("note", ""),
+        )
+        return self.handle_result(result, BookingSerializer)
 
 
-class MyBookingsAPIView(APIView):
+class MyBookingsAPIView(BaseAPIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        bookings = booking_service.get_my_bookings(request.user)
-        return Response(BookingSerializer(bookings, many=True, context={"request": request}).data)
+        result = booking_service.get_my_bookings(request.user)
+        return self.handle_result(result, BookingSerializer, many=True)
 
 
-class TrainerBookingCreateAPIView(APIView):
+class TrainerBookingCreateAPIView(BaseAPIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
         serializer = TrainerBookingSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
-        try:
-            booking = booking_service.create_trainer_booking(
-                request.user,
-                data["trainer"].id,
-                data["start_time"],
-                data["end_time"],
-                data.get("note", ""),
-            )
-        except GymException as exc:
-            return error_response(exc)
-        return Response(TrainerBookingSerializer(booking, context={"request": request}).data, status=status.HTTP_201_CREATED)
+        result = booking_service.create_trainer_booking(
+            request.user,
+            data["trainer"].id,
+            data["start_time"],
+            data["end_time"],
+            data.get("note", ""),
+        )
+        return self.handle_result(result, TrainerBookingSerializer)
 
 
-class MyTrainerBookingsAPIView(APIView):
+class MyTrainerBookingsAPIView(BaseAPIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        bookings = booking_service.get_my_trainer_bookings(request.user)
-        return Response(TrainerBookingSerializer(bookings, many=True, context={"request": request}).data)
+        result = booking_service.get_my_trainer_bookings(request.user)
+        return self.handle_result(result, TrainerBookingSerializer, many=True)
 
 
-class TrainerBookingCancelAPIView(APIView):
+class TrainerBookingCancelAPIView(BaseAPIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, booking_id):
         reason = request.data.get("cancellation_reason", "")
-        try:
-            booking = booking_service.cancel_trainer_booking(request.user, booking_id, reason)
-        except GymException as exc:
-            return error_response(exc)
-        return Response(TrainerBookingSerializer(booking, context={"request": request}).data)
+        result = booking_service.cancel_trainer_booking(request.user, booking_id, reason)
+        return self.handle_result(result, TrainerBookingSerializer)
 
 
-class TrainerMonthlyBookingCreateAPIView(APIView):
+class TrainerMonthlyBookingCreateAPIView(BaseAPIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
         serializer = TrainerMonthlyBookingSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
-        try:
-            booking = booking_service.create_trainer_monthly_booking(
-                request.user,
-                data["trainer"].id,
-                data["start_date"],
-                data.get("months", 1),
-                data.get("sessions_per_week", 3),
-                data.get("preferred_time"),
-                data.get("note", ""),
-            )
-        except GymException as exc:
-            return error_response(exc)
-        return Response(TrainerMonthlyBookingSerializer(booking, context={"request": request}).data, status=status.HTTP_201_CREATED)
+        result = booking_service.create_trainer_monthly_booking(
+            request.user,
+            data["trainer"].id,
+            data["start_date"],
+            data.get("months", 1),
+            data.get("sessions_per_week", 3),
+            data.get("preferred_time"),
+            data.get("note", ""),
+        )
+        return self.handle_result(result, TrainerMonthlyBookingSerializer)
 
 
-class MyTrainerMonthlyBookingsAPIView(APIView):
+class MyTrainerMonthlyBookingsAPIView(BaseAPIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        bookings = booking_service.get_my_trainer_monthly_bookings(request.user)
-        return Response(TrainerMonthlyBookingSerializer(bookings, many=True, context={"request": request}).data)
+        result = booking_service.get_my_trainer_monthly_bookings(request.user)
+        return self.handle_result(result, TrainerMonthlyBookingSerializer, many=True)
 
 
-class TrainerMonthlyBookingCancelAPIView(APIView):
+class TrainerMonthlyBookingCancelAPIView(BaseAPIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, booking_id):
         reason = request.data.get("cancellation_reason", "")
-        try:
-            booking = booking_service.cancel_trainer_monthly_booking(request.user, booking_id, reason)
-        except GymException as exc:
-            return error_response(exc)
-        return Response(TrainerMonthlyBookingSerializer(booking, context={"request": request}).data)
+        result = booking_service.cancel_trainer_monthly_booking(request.user, booking_id, reason)
+        return self.handle_result(result, TrainerMonthlyBookingSerializer)
 
 
-class BookingCancelAPIView(APIView):
+class BookingCancelAPIView(BaseAPIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, booking_id):
         reason = request.data.get("cancellation_reason", "")
-        try:
-            booking = cancel_booking.execute(request.user, booking_id, reason)
-        except GymException as exc:
-            return error_response(exc)
-        return Response(BookingSerializer(booking, context={"request": request}).data)
+        result = cancel_booking.execute(request.user, booking_id, reason)
+        return self.handle_result(result, BookingSerializer)
 
 
-class MembershipPackageListAPIView(APIView):
+class MembershipPackageListAPIView(BaseAPIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
-        packages = membership_service.get_active_packages()
-        return Response(MembershipPackageSerializer(packages, many=True, context={"request": request}).data)
+        result = membership_service.get_active_packages()
+        return self.handle_result(result, MembershipPackageSerializer, many=True)
 
 
-class MembershipCreateAPIView(APIView):
+class MembershipCreateAPIView(BaseAPIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        try:
-            membership = create_membership.execute(request.user, request.data.get("package"))
-        except GymException as exc:
-            return error_response(exc)
-        return Response(
-            UserMembershipSerializer(membership, context={"request": request}).data,
-            status=status.HTTP_201_CREATED,
-        )
+        result = create_membership.execute(request.user, request.data.get("package"))
+        return self.handle_result(result, UserMembershipSerializer)
 
 
-class MyMembershipsAPIView(APIView):
+class MyMembershipsAPIView(BaseAPIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        memberships = membership_service.get_my_memberships(request.user)
-        return Response(UserMembershipSerializer(memberships, many=True, context={"request": request}).data)
+        result = membership_service.get_my_memberships(request.user)
+        return self.handle_result(result, UserMembershipSerializer, many=True)
 
 
-class MembershipCancelAPIView(APIView):
+class MembershipCancelAPIView(BaseAPIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, membership_id):
-        try:
-            membership = membership_service.cancel_membership(request.user, membership_id)
-        except GymException as exc:
-            return error_response(exc)
-        return Response(UserMembershipSerializer(membership, context={"request": request}).data)
+        result = membership_service.cancel_membership(request.user, membership_id)
+        return self.handle_result(result, UserMembershipSerializer)
 
 
-class PaymentCreateAPIView(APIView):
+class PaymentCreateAPIView(BaseAPIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
         serializer = PaymentSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        try:
-            payment = create_payment.execute(
-                request.user,
-                serializer.validated_data["membership"].id,
-                serializer.validated_data["payment_method"],
-            )
-        except GymException as exc:
-            return error_response(exc)
-        return Response(PaymentSerializer(payment, context={"request": request}).data, status=status.HTTP_201_CREATED)
+        result = create_payment.execute(
+            request.user,
+            serializer.validated_data["membership"].id,
+            serializer.validated_data["payment_method"],
+        )
+        return self.handle_result(result, PaymentSerializer)
 
 
-class MyPaymentsAPIView(APIView):
+class MyPaymentsAPIView(BaseAPIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        payments = payment_service.get_my_payments(request.user)
-        return Response(PaymentSerializer(payments, many=True, context={"request": request}).data)
+        result = payment_service.get_my_payments(request.user)
+        return self.handle_result(result, PaymentSerializer, many=True)
 
 
-class PaymentConfirmAPIView(APIView):
+class PaymentConfirmAPIView(BaseAPIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, payment_id):
@@ -400,20 +380,17 @@ class PaymentConfirmAPIView(APIView):
 
         payment_obj = Payment.objects.filter(id=payment_id).first()
         if not payment_obj:
-            return Response({"detail": "Payment not found."}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"message": "Payment not found."}, status=status.HTTP_404_NOT_FOUND)
 
         is_admin = hasattr(request.user, "profile") and request.user.profile.role == "admin"
         if payment_obj.user_id != request.user.id and not is_admin:
-            return Response({"detail": "Permission denied."}, status=status.HTTP_403_FORBIDDEN)
+            return Response({"message": "Permission denied."}, status=status.HTTP_403_FORBIDDEN)
 
-        try:
-            payment = payment_service.confirm_payment(payment_id)
-        except GymException as exc:
-            return error_response(exc)
-        return Response(PaymentSerializer(payment, context={"request": request}).data)
+        result = payment_service.confirm_payment(payment_id)
+        return self.handle_result(result, PaymentSerializer)
 
 
-class TrainerBookingPaymentCreateAPIView(APIView):
+class TrainerBookingPaymentCreateAPIView(BaseAPIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, booking_id):
@@ -421,80 +398,73 @@ class TrainerBookingPaymentCreateAPIView(APIView):
         if not payment_method:
             return Response({"message": "payment_method is required."}, status=status.HTTP_400_BAD_REQUEST)
 
-        try:
-            payment = payment_service.create_trainer_booking_payment(
-                user=request.user,
-                trainer_booking_id=booking_id,
-                payment_method=payment_method,
-            )
-        except GymException as exc:
-            return error_response(exc)
-
-        return Response(PaymentSerializer(payment, context={"request": request}).data, status=status.HTTP_201_CREATED)
+        result = payment_service.create_trainer_booking_payment(
+            user=request.user,
+            trainer_booking_id=booking_id,
+            payment_method=payment_method,
+        )
+        return self.handle_result(result, PaymentSerializer)
 
 
-class ReviewCreateAPIView(APIView):
+class ReviewCreateAPIView(BaseAPIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
         serializer = ReviewSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
-        try:
-            review = create_review.execute(
-                user=request.user,
-                trainer_id=data["trainer"].id if data.get("trainer") else None,
-                gym_class_id=data["gym_class"].id if data.get("gym_class") else None,
-                rating=data.get("rating"),
-                comment=data.get("comment", ""),
-            )
-        except GymException as exc:
-            return error_response(exc)
-        return Response(ReviewSerializer(review, context={"request": request}).data, status=status.HTTP_201_CREATED)
+        result = create_review.execute(
+            user=request.user,
+            trainer_id=data["trainer"].id if data.get("trainer") else None,
+            gym_class_id=data["gym_class"].id if data.get("gym_class") else None,
+            rating=data.get("rating"),
+            comment=data.get("comment", ""),
+        )
+        return self.handle_result(result, ReviewSerializer)
 
 
-class TrainerReviewsAPIView(APIView):
+class TrainerReviewsAPIView(BaseAPIView):
     permission_classes = [AllowAny]
 
     def get(self, request, trainer_id):
-        reviews = review_service.get_reviews_by_trainer(trainer_id)
-        return Response(ReviewSerializer(reviews, many=True, context={"request": request}).data)
+        result = review_service.get_reviews_by_trainer(trainer_id)
+        return self.handle_result(result, ReviewSerializer, many=True)
 
 
-class ClassReviewsAPIView(APIView):
+class ClassReviewsAPIView(BaseAPIView):
     permission_classes = [AllowAny]
 
     def get(self, request, class_id):
-        reviews = review_service.get_reviews_by_class(class_id)
-        return Response(ReviewSerializer(reviews, many=True, context={"request": request}).data)
+        result = review_service.get_reviews_by_class(class_id)
+        return self.handle_result(result, ReviewSerializer, many=True)
 
 
-class AdminBookingListAPIView(APIView):
+class AdminBookingListAPIView(BaseAPIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
         if not hasattr(request.user, "profile") or request.user.profile.role != "admin":
-            return Response({"detail": "Permission denied."}, status=status.HTTP_403_FORBIDDEN)
+            return self.handle_result(Result.failure_result("Permission denied.", status_code=403))
         from gym_booking_backend.infrastructure.models import Booking
         bookings = Booking.objects.select_related("user__profile", "schedule__gym_class", "schedule__trainer", "schedule__room").all()
-        return Response(BookingSerializer(bookings, many=True, context={"request": request}).data)
+        return self.handle_result(Result.success_result(bookings), BookingSerializer, many=True)
 
 
-class AdminBookingStatusAPIView(APIView):
+class AdminBookingStatusAPIView(BaseAPIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, booking_id):
         if not hasattr(request.user, "profile") or request.user.profile.role != "admin":
-            return Response({"detail": "Permission denied."}, status=status.HTTP_403_FORBIDDEN)
+            return self.handle_result(Result.failure_result("Permission denied.", status_code=403))
         from gym_booking_backend.infrastructure.models import Booking
         from gym_booking_backend.domain.constants import BookingStatus, ScheduleStatus
         booking = Booking.objects.filter(id=booking_id).first()
         if not booking:
-            return Response({"detail": "Booking not found."}, status=status.HTTP_404_NOT_FOUND)
+            return self.handle_result(Result.failure_result("Booking not found.", status_code=404))
         
         new_status = request.data.get("status")
         if new_status not in BookingStatus.values:
-            return Response({"detail": "Invalid status."}, status=status.HTTP_400_BAD_REQUEST)
+            return self.handle_result(Result.failure_result("Invalid status.", status_code=400))
         
         old_status = booking.status
         booking.status = new_status
@@ -514,21 +484,21 @@ class AdminBookingStatusAPIView(APIView):
             schedule.save(update_fields=["current_participants", "status", "updated_at"])
             
         booking.save(update_fields=["status"])
-        return Response(BookingSerializer(booking, context={"request": request}).data)
+        return self.handle_result(Result.success_result(booking), BookingSerializer)
 
 
-class AdminScheduleBookingListAPIView(APIView):
+class AdminScheduleBookingListAPIView(BaseAPIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, schedule_id):
         if not hasattr(request.user, "profile") or request.user.profile.role != "admin":
-            return Response({"detail": "Permission denied."}, status=status.HTTP_403_FORBIDDEN)
+            return self.handle_result(Result.failure_result("Permission denied.", status_code=403))
 
         from gym_booking_backend.infrastructure.models import Booking, ClassSchedule
 
         schedule = ClassSchedule.objects.filter(id=schedule_id).first()
         if not schedule:
-            return Response({"detail": "Schedule not found."}, status=status.HTTP_404_NOT_FOUND)
+            return self.handle_result(Result.failure_result("Schedule not found.", status_code=404))
 
         bookings = Booking.objects.select_related("user__profile").filter(schedule_id=schedule_id)
         data = []
@@ -547,84 +517,76 @@ class AdminScheduleBookingListAPIView(APIView):
                 "emergency_contact_name": profile.emergency_contact_name if profile else "",
                 "emergency_contact_phone": profile.emergency_contact_phone if profile else "",
             })
-        return Response(data)
+        return self.handle_result(Result.success_result(data))
 
 
-class AdminTrainerMonthlyBookingListAPIView(APIView):
+class AdminTrainerMonthlyBookingListAPIView(BaseAPIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        if not hasattr(request.user, "profile") or request.user.profile.role != "admin":
-            return Response({"detail": "Permission denied."}, status=status.HTTP_403_FORBIDDEN)
-        bookings = booking_service.get_admin_trainer_monthly_bookings()
-        return Response(TrainerMonthlyBookingSerializer(bookings, many=True, context={"request": request}).data)
+        result = booking_service.get_all_trainer_monthly_bookings(request.user)
+        return self.handle_result(result, TrainerMonthlyBookingSerializer, many=True)
 
 
-class AdminTrainerMonthlyBookingStatusAPIView(APIView):
+class AdminTrainerMonthlyBookingStatusAPIView(BaseAPIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, booking_id):
         if not hasattr(request.user, "profile") or request.user.profile.role != "admin":
-            return Response({"detail": "Permission denied."}, status=status.HTTP_403_FORBIDDEN)
-        try:
-            booking = booking_service.update_admin_trainer_monthly_booking_status(booking_id, request.data.get("status"))
-        except GymException as exc:
-            return error_response(exc)
-        return Response(TrainerMonthlyBookingSerializer(booking, context={"request": request}).data)
+            return self.handle_result(Result.failure_result("Permission denied.", status_code=403))
+        result = booking_service.update_admin_trainer_monthly_booking_status(booking_id, request.data.get("status"))
+        return self.handle_result(result, TrainerMonthlyBookingSerializer)
 
 
-class AdminPaymentListAPIView(APIView):
+class AdminPaymentListAPIView(BaseAPIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
         if not hasattr(request.user, "profile") or request.user.profile.role != "admin":
-            return Response({"detail": "Permission denied."}, status=status.HTTP_403_FORBIDDEN)
+            return self.handle_result(Result.failure_result("Permission denied.", status_code=403))
         from gym_booking_backend.infrastructure.models import Payment
         payments = Payment.objects.select_related("user__profile", "membership__package").all()
-        return Response(PaymentSerializer(payments, many=True, context={"request": request}).data)
+        return self.handle_result(Result.success_result(payments), PaymentSerializer, many=True)
 
 
-class AdminPaymentConfirmAPIView(APIView):
+class AdminPaymentConfirmAPIView(BaseAPIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, payment_id):
         if not hasattr(request.user, "profile") or request.user.profile.role != "admin":
-            return Response({"detail": "Permission denied."}, status=status.HTTP_403_FORBIDDEN)
-        try:
-            payment = payment_service.confirm_payment(payment_id)
-        except GymException as exc:
-            return error_response(exc)
-        return Response(PaymentSerializer(payment, context={"request": request}).data)
+            return self.handle_result(Result.failure_result("Permission denied.", status_code=403))
+        result = payment_service.confirm_payment(payment_id)
+        return self.handle_result(result, PaymentSerializer)
 
 
-class TrainerScheduleListAPIView(APIView):
+class TrainerScheduleListAPIView(BaseAPIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
         if not hasattr(request.user, "profile") or request.user.profile.role != "trainer":
-            return Response({"detail": "Permission denied."}, status=status.HTTP_403_FORBIDDEN)
+            return self.handle_result(Result.failure_result("Permission denied.", status_code=403))
         from gym_booking_backend.infrastructure.models import Trainer, ClassSchedule
         trainer = Trainer.objects.filter(user=request.user).first()
         if not trainer:
-            return Response({"detail": "Trainer profile not linked to user."}, status=status.HTTP_404_NOT_FOUND)
+            return self.handle_result(Result.failure_result("Trainer profile not linked to user.", status_code=404))
         schedules = ClassSchedule.objects.select_related("gym_class", "trainer", "room").filter(trainer=trainer)
-        return Response(ClassScheduleSerializer(schedules, many=True, context={"request": request}).data)
+        return self.handle_result(Result.success_result(schedules), ClassScheduleSerializer, many=True)
 
 
-class TrainerScheduleBookingListAPIView(APIView):
+class TrainerScheduleBookingListAPIView(BaseAPIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, schedule_id):
         if not hasattr(request.user, "profile") or request.user.profile.role != "trainer":
-            return Response({"detail": "Permission denied."}, status=status.HTTP_403_FORBIDDEN)
+            return self.handle_result(Result.failure_result("Permission denied.", status_code=403))
         from gym_booking_backend.infrastructure.models import Trainer, ClassSchedule, Booking
         trainer = Trainer.objects.filter(user=request.user).first()
         if not trainer:
-            return Response({"detail": "Trainer profile not linked to user."}, status=status.HTTP_404_NOT_FOUND)
+            return self.handle_result(Result.failure_result("Trainer profile not linked to user.", status_code=404))
         
         schedule = ClassSchedule.objects.filter(id=schedule_id, trainer=trainer).first()
         if not schedule:
-            return Response({"detail": "Schedule not found or does not belong to you."}, status=status.HTTP_404_NOT_FOUND)
+            return self.handle_result(Result.failure_result("Schedule not found or does not belong to you.", status_code=404))
             
         bookings = Booking.objects.select_related("user__profile").filter(schedule_id=schedule_id)
         data = []
@@ -643,81 +605,69 @@ class TrainerScheduleBookingListAPIView(APIView):
                 "emergency_contact_name": profile.emergency_contact_name if profile else "",
                 "emergency_contact_phone": profile.emergency_contact_phone if profile else "",
             })
-        return Response(data)
+        return self.handle_result(Result.success_result(data))
 
 
-class TrainerPersonalBookingListAPIView(APIView):
+class TrainerPersonalBookingListAPIView(BaseAPIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        try:
-            bookings = booking_service.get_trainer_personal_bookings(request.user)
-        except GymException as exc:
-            return error_response(exc, status.HTTP_404_NOT_FOUND)
-        return Response(TrainerBookingSerializer(bookings, many=True, context={"request": request}).data)
+        result = booking_service.get_trainer_personal_bookings(request.user)
+        return self.handle_result(result, TrainerBookingSerializer, many=True)
 
 
-class TrainerPersonalBookingStatusAPIView(APIView):
+class TrainerPersonalBookingStatusAPIView(BaseAPIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, booking_id):
         new_status = request.data.get("status")
-        try:
-            booking = booking_service.update_trainer_booking_status(request.user, booking_id, new_status)
-        except GymException as exc:
-            return error_response(exc)
-        return Response(TrainerBookingSerializer(booking, context={"request": request}).data)
+        result = booking_service.update_trainer_booking_status(request.user, booking_id, new_status)
+        return self.handle_result(result, TrainerBookingSerializer)
 
 
-class TrainerMonthlyBookingListAPIView(APIView):
+class TrainerMonthlyBookingListAPIView(BaseAPIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        try:
-            bookings = booking_service.get_trainer_monthly_bookings(request.user)
-        except GymException as exc:
-            return error_response(exc, status.HTTP_404_NOT_FOUND)
-        return Response(TrainerMonthlyBookingSerializer(bookings, many=True, context={"request": request}).data)
+        result = booking_service.get_trainer_monthly_bookings(request.user)
+        return self.handle_result(result, TrainerMonthlyBookingSerializer, many=True)
 
 
-class TrainerMonthlyBookingStatusAPIView(APIView):
+class TrainerMonthlyBookingStatusAPIView(BaseAPIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, booking_id):
-        try:
-            booking = booking_service.update_trainer_monthly_booking_status(request.user, booking_id, request.data.get("status"))
-        except GymException as exc:
-            return error_response(exc)
-        return Response(TrainerMonthlyBookingSerializer(booking, context={"request": request}).data)
+        result = booking_service.update_trainer_monthly_booking_status(request.user, booking_id, request.data.get("status"))
+        return self.handle_result(result, TrainerMonthlyBookingSerializer)
 
 
-class TrainerBookingAttendanceAPIView(APIView):
+class TrainerBookingAttendanceAPIView(BaseAPIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, booking_id):
         if not hasattr(request.user, "profile") or request.user.profile.role != "trainer":
-            return Response({"detail": "Permission denied."}, status=status.HTTP_403_FORBIDDEN)
+            return self.handle_result(Result.failure_result("Permission denied.", status_code=403))
         
         from gym_booking_backend.infrastructure.models import Trainer, Booking
         trainer = Trainer.objects.filter(user=request.user).first()
         if not trainer:
-            return Response({"detail": "Trainer profile not linked to user."}, status=status.HTTP_404_NOT_FOUND)
+            return self.handle_result(Result.failure_result("Trainer profile not linked to user.", status_code=404))
 
         booking = Booking.objects.filter(id=booking_id, schedule__trainer=trainer).first()
         if not booking:
-            return Response({"detail": "Booking not found or does not belong to your schedule."}, status=status.HTTP_404_NOT_FOUND)
+            return self.handle_result(Result.failure_result("Booking not found or does not belong to your schedule.", status_code=404))
 
         new_status = request.data.get("status")
         if new_status not in ["completed", "no_show"]:
-            return Response({"detail": "Invalid status for attendance."}, status=status.HTTP_400_BAD_REQUEST)
+            return self.handle_result(Result.failure_result("Invalid status for attendance.", status_code=400))
 
         booking.status = new_status
         booking.save(update_fields=["status"])
 
-        return Response(BookingSerializer(booking, context={"request": request}).data)
+        return self.handle_result(Result.success_result(booking), BookingSerializer)
 
 
-class MembershipFreezeAPIView(APIView):
+class MembershipFreezeAPIView(BaseAPIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, membership_id):
@@ -726,78 +676,74 @@ class MembershipFreezeAPIView(APIView):
         reason = request.data.get("reason", "")
 
         if not start_date or not end_date:
-            return Response({"detail": "start_date and end_date are required."}, status=status.HTTP_400_BAD_REQUEST)
+            return self.handle_result(Result.failure_result("start_date and end_date are required.", status_code=400))
 
-        try:
-            freeze = membership_service.freeze_membership(
-                user=request.user,
-                membership_id=membership_id,
-                start_date=start_date,
-                end_date=end_date,
-                reason=reason
-            )
-        except GymException as exc:
-            return error_response(exc)
-
+        result = membership_service.freeze_membership(
+            user=request.user,
+            membership_id=membership_id,
+            start_date=start_date,
+            end_date=end_date,
+            reason=reason
+        )
         from gym_booking_backend.presentation.serializers import MembershipFreezeSerializer
-        return Response(MembershipFreezeSerializer(freeze, context={"request": request}).data, status=status.HTTP_201_CREATED)
+        return self.handle_result(result, MembershipFreezeSerializer)
 
 
-class MyInvoicesAPIView(APIView):
+class MyInvoicesAPIView(BaseAPIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
         from gym_booking_backend.infrastructure.models import Invoice
         invoices = Invoice.objects.filter(user=request.user)
         from gym_booking_backend.presentation.serializers import InvoiceSerializer
-        return Response(InvoiceSerializer(invoices, many=True, context={"request": request}).data)
+        return self.handle_result(Result.success_result(invoices), InvoiceSerializer, many=True)
 
 
-class InvoiceDetailAPIView(APIView):
+class InvoiceDetailAPIView(BaseAPIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, invoice_id):
         from gym_booking_backend.infrastructure.models import Invoice
         invoice = Invoice.objects.filter(id=invoice_id, user=request.user).first()
         if not invoice:
-            return Response({"detail": "Invoice not found."}, status=status.HTTP_404_NOT_FOUND)
+            return self.handle_result(Result.failure_result("Invoice not found.", status_code=404))
         from gym_booking_backend.presentation.serializers import InvoiceSerializer
-        return Response(InvoiceSerializer(invoice, context={"request": request}).data)
+        return self.handle_result(Result.success_result(invoice), InvoiceSerializer)
 
 
-class TrainerReviewsListAPIView(APIView):
+class TrainerReviewsListAPIView(BaseAPIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
         if not hasattr(request.user, "profile") or request.user.profile.role != "trainer":
-            return Response({"detail": "Permission denied."}, status=status.HTTP_403_FORBIDDEN)
+            return self.handle_result(Result.failure_result("Permission denied.", status_code=403))
         from gym_booking_backend.infrastructure.models import Trainer, Review
         trainer = Trainer.objects.filter(user=request.user).first()
         if not trainer:
-            return Response({"detail": "Trainer profile not linked to user."}, status=status.HTTP_404_NOT_FOUND)
+            return self.handle_result(Result.failure_result("Trainer profile not linked to user.", status_code=404))
         reviews = Review.objects.filter(trainer=trainer)
         from gym_booking_backend.presentation.serializers import ReviewSerializer
-        return Response(ReviewSerializer(reviews, many=True, context={"request": request}).data)
+        return self.handle_result(Result.success_result(reviews), ReviewSerializer, many=True)
 
 
-class AdminInvoiceListAPIView(APIView):
+class AdminInvoiceListAPIView(BaseAPIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
         if not hasattr(request.user, "profile") or request.user.profile.role != "admin":
-            return Response({"detail": "Permission denied."}, status=status.HTTP_403_FORBIDDEN)
+            return self.handle_result(Result.failure_result("Permission denied.", status_code=403))
         from gym_booking_backend.infrastructure.models import Invoice
         invoices = Invoice.objects.select_related("user__profile").all()
         from gym_booking_backend.presentation.serializers import InvoiceSerializer
-        return Response(InvoiceSerializer(invoices, many=True, context={"request": request}).data)
+        return self.handle_result(Result.success_result(invoices), InvoiceSerializer, many=True)
 
 
-class AdminCreateScheduleAPIView(APIView):
+class AdminCreateScheduleAPIView(BaseAPIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
         if not hasattr(request.user, "profile") or request.user.profile.role != "admin":
-            return Response({"detail": "Permission denied."}, status=status.HTTP_403_FORBIDDEN)
+            return self.handle_result(Result.failure_result("Permission denied.", status_code=403))
         
         from django.core.exceptions import ValidationError
         from gym_booking_backend.presentation.serializers import ClassScheduleSerializer
@@ -805,20 +751,20 @@ class AdminCreateScheduleAPIView(APIView):
         serializer.is_valid(raise_exception=True)
         try:
             schedule = serializer.save()
+            return self.handle_result(Result.success_result(schedule, status_code=201), ClassScheduleSerializer)
         except ValidationError as exc:
-            return Response({"message": str(exc.message_dict if hasattr(exc, 'message_dict') else exc.messages)}, status=status.HTTP_400_BAD_REQUEST)
+            msg = exc.message_dict if hasattr(exc, 'message_dict') else exc.messages
+            return self.handle_result(Result.failure_result(str(msg), status_code=400))
         except Exception as exc:
-            return error_response(exc)
-
-        return Response(ClassScheduleSerializer(schedule, context={"request": request}).data, status=status.HTTP_201_CREATED)
+            return self.handle_result(Result.failure_result(str(exc), status_code=400))
 
 
-class AdminScheduleDetailAPIView(APIView):
+class AdminScheduleDetailAPIView(BaseAPIView):
     permission_classes = [IsAuthenticated]
 
     def _require_admin(self, request):
         if not hasattr(request.user, "profile") or request.user.profile.role != "admin":
-            return Response({"detail": "Permission denied."}, status=status.HTTP_403_FORBIDDEN)
+            return self.handle_result(Result.failure_result("Permission denied.", status_code=403))
         return None
 
     def patch(self, request, schedule_id):
@@ -831,18 +777,18 @@ class AdminScheduleDetailAPIView(APIView):
 
         schedule = ClassSchedule.objects.filter(id=schedule_id).first()
         if not schedule:
-            return Response({"detail": "Schedule not found."}, status=status.HTTP_404_NOT_FOUND)
+            return self.handle_result(Result.failure_result("Schedule not found.", status_code=404))
 
         serializer = ClassScheduleSerializer(schedule, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         try:
             schedule = serializer.save()
+            return self.handle_result(Result.success_result(schedule), ClassScheduleSerializer)
         except ValidationError as exc:
-            return Response({"message": str(exc.message_dict if hasattr(exc, "message_dict") else exc.messages)}, status=status.HTTP_400_BAD_REQUEST)
+            msg = exc.message_dict if hasattr(exc, "message_dict") else exc.messages
+            return self.handle_result(Result.failure_result(str(msg), status_code=400))
         except Exception as exc:
-            return error_response(exc)
-
-        return Response(ClassScheduleSerializer(schedule, context={"request": request}).data)
+            return self.handle_result(Result.failure_result(str(exc), status_code=400))
 
     def delete(self, request, schedule_id):
         deny = self._require_admin(request)
@@ -853,18 +799,18 @@ class AdminScheduleDetailAPIView(APIView):
 
         schedule = ClassSchedule.objects.filter(id=schedule_id).first()
         if not schedule:
-            return Response({"detail": "Schedule not found."}, status=status.HTTP_404_NOT_FOUND)
+            return self.handle_result(Result.failure_result("Schedule not found.", status_code=404))
 
         schedule.delete()
-        return Response({"message": "Deleted schedule successfully."})
+        return self.handle_result(Result.success_result({"message": "Deleted schedule successfully."}))
 
 
-class AdminCreateUserAPIView(APIView):
+class AdminCreateUserAPIView(BaseAPIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
         if not hasattr(request.user, "profile") or request.user.profile.role != "admin":
-            return Response({"detail": "Permission denied."}, status=status.HTTP_403_FORBIDDEN)
+            return self.handle_result(Result.failure_result("Permission denied.", status_code=403))
 
         username = request.data.get("username", "").strip()
         email = request.data.get("email", "").strip()
@@ -874,28 +820,28 @@ class AdminCreateUserAPIView(APIView):
         role = request.data.get("role", "member")
 
         if not username or not password:
-            return Response({"message": "Tên đăng nhập và mật khẩu là bắt buộc."}, status=status.HTTP_400_BAD_REQUEST)
+            return self.handle_result(Result.failure_result("Tên đăng nhập và mật khẩu là bắt buộc.", status_code=400))
 
         if role not in ("member", "trainer"):
-            return Response({"message": "Vai trò phải là 'member' hoặc 'trainer'."}, status=status.HTTP_400_BAD_REQUEST)
+            return self.handle_result(Result.failure_result("Vai trò phải là 'member' hoặc 'trainer'.", status_code=400))
 
         from django.contrib.auth.models import User
         if User.objects.filter(username=username).exists():
-            return Response({"message": f"Tên đăng nhập '{username}' đã tồn tại."}, status=status.HTTP_400_BAD_REQUEST)
+            return self.handle_result(Result.failure_result(f"Tên đăng nhập '{username}' đã tồn tại.", status_code=400))
 
+        result = register_user.execute(
+            username=username,
+            email=email,
+            password=password,
+            first_name=full_name.split(" ", 1)[0] if full_name else "",
+            last_name=full_name.split(" ", 1)[1] if " " in full_name else "",
+            role=role,
+        )
+        if not result.success:
+            return self.handle_result(result)
+
+        user = result.data
         try:
-            first_name = full_name.split(" ", 1)[0] if full_name else ""
-            last_name = full_name.split(" ", 1)[1] if " " in full_name else ""
-
-            user = register_user.execute(
-                username=username,
-                email=email,
-                password=password,
-                first_name=first_name,
-                last_name=last_name,
-                role=role,
-            )
-
             # Update profile with additional info
             from gym_booking_backend.infrastructure.models import Profile
             profile, _ = Profile.objects.get_or_create(
@@ -924,22 +870,22 @@ class AdminCreateUserAPIView(APIView):
                     }
                 )
 
-            return Response({
+            return self.handle_result(Result.success_result({
                 "message": f"Tạo tài khoản '{username}' thành công với vai trò {'Hội viên' if role == 'member' else 'Huấn luyện viên'}.",
                 "id": user.id,
                 "username": user.username,
                 "role": role,
-            }, status=status.HTTP_201_CREATED)
-        except GymException as exc:
-            return error_response(exc)
+            }, status_code=201))
+        except Exception as exc:
+            return self.handle_result(Result.failure_result(str(exc), status_code=400))
 
 
-class AdminCreateGymClassAPIView(APIView):
+class AdminCreateGymClassAPIView(BaseAPIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
         if not hasattr(request.user, "profile") or request.user.profile.role != "admin":
-            return Response({"detail": "Permission denied."}, status=status.HTTP_403_FORBIDDEN)
+            return self.handle_result(Result.failure_result("Permission denied.", status_code=403))
 
         from gym_booking_backend.infrastructure.models import GymClass, Category, Trainer as TrainerModel
 
@@ -952,18 +898,18 @@ class AdminCreateGymClassAPIView(APIView):
         price = request.data.get("price", 0)
 
         if not name or not category_id or not trainer_id:
-            return Response({"message": "Tên lớp, danh mục và HLV là bắt buộc."}, status=status.HTTP_400_BAD_REQUEST)
+            return self.handle_result(Result.failure_result("Tên lớp, danh mục và HLV là bắt buộc.", status_code=400))
 
         category = Category.objects.filter(id=category_id).first()
         if not category:
-            return Response({"message": "Danh mục không tồn tại."}, status=status.HTTP_400_BAD_REQUEST)
+            return self.handle_result(Result.failure_result("Danh mục không tồn tại.", status_code=400))
 
         trainer = TrainerModel.objects.filter(id=trainer_id).first()
         if not trainer:
-            return Response({"message": "Huấn luyện viên không tồn tại."}, status=status.HTTP_400_BAD_REQUEST)
+            return self.handle_result(Result.failure_result("Huấn luyện viên không tồn tại.", status_code=400))
 
         if GymClass.objects.filter(name=name).exists():
-            return Response({"message": f"Lớp tập '{name}' đã tồn tại."}, status=status.HTTP_400_BAD_REQUEST)
+            return self.handle_result(Result.failure_result(f"Lớp tập '{name}' đã tồn tại.", status_code=400))
 
         try:
             gym_class = GymClass.objects.create(
@@ -975,20 +921,17 @@ class AdminCreateGymClassAPIView(APIView):
                 duration_minutes=int(duration_minutes),
                 price=float(price or 0),
             )
-            return Response(
-                GymClassSerializer(gym_class, context={"request": request}).data,
-                status=status.HTTP_201_CREATED,
-            )
+            return self.handle_result(Result.success_result(gym_class, status_code=201), GymClassSerializer)
         except Exception as exc:
-            return error_response(exc)
+            return self.handle_result(Result.failure_result(str(exc), status_code=400))
 
 
-class AdminCreatePackageAPIView(APIView):
+class AdminCreatePackageAPIView(BaseAPIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
         if not hasattr(request.user, "profile") or request.user.profile.role != "admin":
-            return Response({"detail": "Permission denied."}, status=status.HTTP_403_FORBIDDEN)
+            return self.handle_result(Result.failure_result("Permission denied.", status_code=403))
 
         from gym_booking_backend.infrastructure.models import MembershipPackage
 
@@ -998,10 +941,10 @@ class AdminCreatePackageAPIView(APIView):
         duration_days = request.data.get("duration_days")
 
         if not name or not price or not duration_days:
-            return Response({"message": "Tên gói, giá và số ngày là bắt buộc."}, status=status.HTTP_400_BAD_REQUEST)
+            return self.handle_result(Result.failure_result("Tên gói, giá và số ngày là bắt buộc.", status_code=400))
 
         if MembershipPackage.objects.filter(name=name).exists():
-            return Response({"message": f"Gói tập '{name}' đã tồn tại."}, status=status.HTTP_400_BAD_REQUEST)
+            return self.handle_result(Result.failure_result(f"Gói tập '{name}' đã tồn tại.", status_code=400))
 
         try:
             max_bookings = request.data.get("max_bookings_per_week")
@@ -1014,20 +957,17 @@ class AdminCreatePackageAPIView(APIView):
                 is_freezable=request.data.get("is_freezable", True),
                 max_freeze_days=int(request.data.get("max_freeze_days", 30)),
             )
-            return Response(
-                MembershipPackageSerializer(package, context={"request": request}).data,
-                status=status.HTTP_201_CREATED,
-            )
+            return self.handle_result(Result.success_result(package, status_code=201), MembershipPackageSerializer)
         except Exception as exc:
-            return error_response(exc)
+            return self.handle_result(Result.failure_result(str(exc), status_code=400))
 
 
-class AdminPackageDetailAPIView(APIView):
+class AdminPackageDetailAPIView(BaseAPIView):
     permission_classes = [IsAuthenticated]
 
     def _require_admin(self, request):
         if not hasattr(request.user, "profile") or request.user.profile.role != "admin":
-            return Response({"detail": "Permission denied."}, status=status.HTTP_403_FORBIDDEN)
+            return self.handle_result(Result.failure_result("Permission denied.", status_code=403))
         return None
 
     def patch(self, request, package_id):
@@ -1039,12 +979,12 @@ class AdminPackageDetailAPIView(APIView):
 
         package = MembershipPackage.objects.filter(id=package_id).first()
         if not package:
-            return Response({"detail": "Package not found."}, status=status.HTTP_404_NOT_FOUND)
+            return self.handle_result(Result.failure_result("Package not found.", status_code=404))
 
         serializer = MembershipPackageSerializer(package, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         package = serializer.save()
-        return Response(MembershipPackageSerializer(package, context={"request": request}).data)
+        return self.handle_result(Result.success_result(package), MembershipPackageSerializer)
 
     def delete(self, request, package_id):
         deny = self._require_admin(request)
@@ -1055,18 +995,18 @@ class AdminPackageDetailAPIView(APIView):
 
         package = MembershipPackage.objects.filter(id=package_id).first()
         if not package:
-            return Response({"detail": "Package not found."}, status=status.HTTP_404_NOT_FOUND)
+            return self.handle_result(Result.failure_result("Package not found.", status_code=404))
 
         package.delete()
-        return Response({"message": "Deleted package successfully."})
+        return self.handle_result(Result.success_result({"message": "Deleted package successfully."}))
 
 
-class AdminTrainerListCreateAPIView(APIView):
+class AdminTrainerListCreateAPIView(BaseAPIView):
     permission_classes = [IsAuthenticated]
 
     def _require_admin(self, request):
         if not hasattr(request.user, "profile") or request.user.profile.role != "admin":
-            return Response({"detail": "Permission denied."}, status=status.HTTP_403_FORBIDDEN)
+            return self.handle_result(Result.failure_result("Permission denied.", status_code=403))
         return None
 
     def get(self, request):
@@ -1075,7 +1015,7 @@ class AdminTrainerListCreateAPIView(APIView):
             return deny
         from gym_booking_backend.infrastructure.models import Trainer
         trainers = Trainer.objects.all()
-        return Response(TrainerSerializer(trainers, many=True, context={"request": request}).data)
+        return self.handle_result(Result.success_result(trainers), TrainerSerializer, many=True)
 
     def post(self, request):
         deny = self._require_admin(request)
@@ -1084,15 +1024,15 @@ class AdminTrainerListCreateAPIView(APIView):
         serializer = TrainerSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         trainer = serializer.save()
-        return Response(TrainerSerializer(trainer, context={"request": request}).data, status=status.HTTP_201_CREATED)
+        return self.handle_result(Result.success_result(trainer, status_code=201), TrainerSerializer)
 
 
-class AdminTrainerDetailAPIView(APIView):
+class AdminTrainerDetailAPIView(BaseAPIView):
     permission_classes = [IsAuthenticated]
 
     def _require_admin(self, request):
         if not hasattr(request.user, "profile") or request.user.profile.role != "admin":
-            return Response({"detail": "Permission denied."}, status=status.HTTP_403_FORBIDDEN)
+            return self.handle_result(Result.failure_result("Permission denied.", status_code=403))
         return None
 
     def patch(self, request, trainer_id):
@@ -1104,12 +1044,12 @@ class AdminTrainerDetailAPIView(APIView):
 
         trainer = Trainer.objects.filter(id=trainer_id).first()
         if not trainer:
-            return Response({"detail": "Trainer not found."}, status=status.HTTP_404_NOT_FOUND)
+            return self.handle_result(Result.failure_result("Trainer not found.", status_code=404))
 
         serializer = TrainerSerializer(trainer, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         trainer = serializer.save()
-        return Response(TrainerSerializer(trainer, context={"request": request}).data)
+        return self.handle_result(Result.success_result(trainer), TrainerSerializer)
 
     def delete(self, request, trainer_id):
         deny = self._require_admin(request)
@@ -1121,14 +1061,11 @@ class AdminTrainerDetailAPIView(APIView):
 
         trainer = Trainer.objects.filter(id=trainer_id).first()
         if not trainer:
-            return Response({"detail": "Trainer not found."}, status=status.HTTP_404_NOT_FOUND)
+            return self.handle_result(Result.failure_result("Trainer not found.", status_code=404))
 
         try:
             trainer.delete()
         except ProtectedError:
-            return Response(
-                {"message": "Cannot delete trainer because it is still linked to class or schedule."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            return self.handle_result(Result.failure_result("Cannot delete trainer because it is still linked to class or schedule.", status_code=400))
 
-        return Response({"message": "Deleted trainer successfully."})
+        return self.handle_result(Result.success_result({"message": "Deleted trainer successfully."}))

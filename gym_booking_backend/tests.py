@@ -342,12 +342,12 @@ class RoleAuthAndDashboardTests(APITestCase):
         self.membership.package = package_with_restriction
         self.membership.save()
         
-        # Try to book the restricted class - should raise an exception in create_booking
-        from gym_booking_backend.domain.exceptions import MembershipRequiredException
+        # Try to book the restricted class - should return a failure Result
         from gym_booking_backend.application.services import booking_service
         
-        with self.assertRaises(MembershipRequiredException):
-            booking_service.create_booking(self.member_user, restricted_schedule.id)
+        res = booking_service.create_booking(self.member_user, restricted_schedule.id)
+        self.assertFalse(res.success)
+        self.assertIn("does not allow booking this class category", res.message)
 
     def test_trainer_attendance_marking(self):
         self.client.force_authenticate(user=self.trainer_user)
@@ -569,7 +569,7 @@ class PTBookingTests(APITestCase):
             start_date += timedelta(days=1)
 
         # Preview PT sessions
-        previews = pt_booking_service.preview_monthly_pt_bookings(
+        result = pt_booking_service.preview_monthly_pt_bookings(
             user=self.member_user,
             package_id=self.pt_package.id,
             trainer_id=self.trainer_record.id,
@@ -578,12 +578,14 @@ class PTBookingTests(APITestCase):
             start_time="10:00",
             end_time="11:00"
         )
+        self.assertTrue(result.success)
+        previews = result.data
         self.assertEqual(len(previews), 12)
         for preview in previews:
             self.assertTrue(preview["is_valid"])
 
         # Create bookings
-        user_package, bookings = pt_booking_service.create_monthly_pt_bookings(
+        result = pt_booking_service.create_monthly_pt_bookings(
             user=self.member_user,
             package_id=self.pt_package.id,
             trainer_id=self.trainer_record.id,
@@ -592,6 +594,9 @@ class PTBookingTests(APITestCase):
             start_time="10:00",
             end_time="11:00"
         )
+        self.assertTrue(result.success)
+        user_package = result.data["package"]
+        bookings = result.data["bookings"]
 
         self.assertEqual(user_package.total_sessions, 12)
         self.assertEqual(user_package.remaining_sessions, 12)
@@ -599,23 +604,7 @@ class PTBookingTests(APITestCase):
         self.assertEqual(PTBooking.objects.filter(user_pt_package=user_package).count(), 12)
 
         # Test overlap checking
-        with self.assertRaises(PTBookingException):
-            pt_booking_service.create_monthly_pt_bookings(
-                user=self.member_user,
-                package_id=self.pt_package.id,
-                trainer_id=self.trainer_record.id,
-                start_date=start_date,
-                selected_weekdays=[0, 2, 4],
-                start_time="10:00",
-                end_time="11:00"
-            )
-
-    def test_complete_and_cancel_pt_booking(self):
-        start_date = timezone.now().date() + timedelta(days=1)
-        while start_date.weekday() != 0:
-            start_date += timedelta(days=1)
-
-        user_package, bookings = pt_booking_service.create_monthly_pt_bookings(
+        result = pt_booking_service.create_monthly_pt_bookings(
             user=self.member_user,
             package_id=self.pt_package.id,
             trainer_id=self.trainer_record.id,
@@ -624,10 +613,30 @@ class PTBookingTests(APITestCase):
             start_time="10:00",
             end_time="11:00"
         )
+        self.assertFalse(result.success)
+        self.assertTrue("conflict" in result.message or "active PT package subscription" in result.message)
+
+    def test_complete_and_cancel_pt_booking(self):
+        start_date = timezone.now().date() + timedelta(days=1)
+        while start_date.weekday() != 0:
+            start_date += timedelta(days=1)
+
+        result = pt_booking_service.create_monthly_pt_bookings(
+            user=self.member_user,
+            package_id=self.pt_package.id,
+            trainer_id=self.trainer_record.id,
+            start_date=start_date,
+            selected_weekdays=[0, 2, 4],
+            start_time="10:00",
+            end_time="11:00"
+        )
+        self.assertTrue(result.success)
+        user_package = result.data["package"]
+        bookings = result.data["bookings"]
         first_booking = bookings[0]
 
         # Complete booking
-        pt_booking_service.complete_pt_booking(first_booking.id)
+        self.assertTrue(pt_booking_service.complete_pt_booking(first_booking.id).success)
         first_booking.refresh_from_db()
         user_package.refresh_from_db()
         self.assertEqual(first_booking.status, "completed")
@@ -636,12 +645,12 @@ class PTBookingTests(APITestCase):
 
         # Cancel other booking
         second_booking = bookings[1]
-        pt_booking_service.cancel_pt_booking(second_booking.id)
+        self.assertTrue(pt_booking_service.cancel_pt_booking(second_booking.id).success)
         second_booking.refresh_from_db()
         self.assertEqual(second_booking.status, "cancelled")
 
         # Cancel package
-        pt_booking_service.cancel_user_pt_package(user_package.id)
+        self.assertTrue(pt_booking_service.cancel_user_pt_package(user_package.id).success)
         user_package.refresh_from_db()
         self.assertEqual(user_package.status, "cancelled")
         # Remaining non-completed active bookings should be cancelled

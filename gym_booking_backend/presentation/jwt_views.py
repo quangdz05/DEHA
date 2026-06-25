@@ -1,4 +1,3 @@
-from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import AllowAny
@@ -9,7 +8,9 @@ from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 from django.contrib.auth.models import User
 from django.conf import settings
 
-from gym_booking_backend.domain.exceptions import GymException
+from gym_booking_backend.domain.result import Result
+from gym_booking_backend.presentation.views import BaseAPIView
+
 
 def set_refresh_cookie(response, refresh_token):
     # SameSite=Lax/Strict depending on environment, path is restricted to refresh endpoint
@@ -22,7 +23,8 @@ def set_refresh_cookie(response, refresh_token):
         path="/api/auth/refresh/"
     )
 
-class LoginAPIView(APIView):
+
+class LoginAPIView(BaseAPIView):
     permission_classes = [AllowAny]
     throttle_classes = [ScopedRateThrottle]
     throttle_scope = "login"
@@ -33,7 +35,7 @@ class LoginAPIView(APIView):
 
         user = authenticate(username=username, password=password)
         if user is None:
-            return Response({"message": "Tên đăng nhập hoặc mật khẩu không đúng."}, status=status.HTTP_400_BAD_REQUEST)
+            return self.handle_result(Result.failure_result("Tên đăng nhập hoặc mật khẩu không đúng.", status_code=400))
 
         profile = getattr(user, "profile", None)
         # Ensure profile exists
@@ -46,10 +48,10 @@ class LoginAPIView(APIView):
 
         # Check if 2FA is enabled
         if profile.two_factor_enabled:
-            return Response({
+            return self.handle_result(Result.success_result({
                 "requires_2fa": True,
                 "user_id": user.id
-            }, status=status.HTTP_200_OK)
+            }, status_code=200))
 
         # If staff/superuser, force role to admin
         from gym_booking_backend.domain.constants import UserRole
@@ -61,25 +63,27 @@ class LoginAPIView(APIView):
         access_token = str(refresh.access_token)
         refresh_token = str(refresh)
 
-        response = Response({
+        data = {
             "id": user.id,
             "username": user.username,
             "email": user.email,
             "role": profile.role,
             "full_name": profile.full_name,
             "access": access_token
-        }, status=status.HTTP_200_OK)
+        }
         
+        response = self.handle_result(Result.success_result(data, status_code=200))
         set_refresh_cookie(response, refresh_token)
         return response
 
-class TokenRefreshAPIView(APIView):
+
+class TokenRefreshAPIView(BaseAPIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
         refresh_token = request.COOKIES.get("refresh_token")
         if not refresh_token:
-            return Response({"detail": "Refresh token missing."}, status=status.HTTP_401_UNAUTHORIZED)
+            return self.handle_result(Result.failure_result("Refresh token missing.", status_code=401))
 
         try:
             refresh = RefreshToken(refresh_token)
@@ -88,23 +92,24 @@ class TokenRefreshAPIView(APIView):
             profile = getattr(user, "profile", None)
             access_token = str(refresh.access_token)
         except (TokenError, InvalidToken, User.DoesNotExist) as e:
-            return Response({"detail": "Invalid refresh token."}, status=status.HTTP_401_UNAUTHORIZED)
+            return self.handle_result(Result.failure_result("Invalid refresh token.", status_code=401))
 
-        response = Response({
+        data = {
             "access": access_token,
             "id": user.id,
             "username": user.username,
             "email": user.email,
             "role": profile.role if profile else "member",
             "full_name": profile.full_name if profile else user.username,
-        }, status=status.HTTP_200_OK)
+        }
         
-        return response
+        return self.handle_result(Result.success_result(data, status_code=200))
 
-class LogoutAPIView(APIView):
+
+class LogoutAPIView(BaseAPIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        response = Response({"message": "Logged out successfully."}, status=status.HTTP_200_OK)
+        response = self.handle_result(Result.success_result({"message": "Logged out successfully."}, status_code=200))
         response.delete_cookie("refresh_token", path="/api/auth/refresh/")
         return response

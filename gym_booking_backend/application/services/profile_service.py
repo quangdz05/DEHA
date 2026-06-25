@@ -1,13 +1,18 @@
-from gym_booking_backend.infrastructure.repositories import profile_repository
+from gym_booking_backend.infrastructure.repositories.profile_repository import profile_repository
+from gym_booking_backend.application.interfaces.services.iprofile_service import IProfileService
+from gym_booking_backend.domain.result import Result
 
 
-def get_my_profile(user):
-    profile = profile_repository.get_profile_by_user(user)
-    if profile:
-        return profile
-    return profile_repository.update_profile(user, full_name=user.get_full_name() or user.username)
+class ProfileService(IProfileService):
+    def get_my_profile(self, user) -> Result:
+        profile = profile_repository.get_profile_by_user(user)
+        if not profile:
+            profile = profile_repository.update_profile(user, full_name=user.get_full_name() or user.username)
+        return Result.success_result(profile, status_code=200)
+
+    def update_my_profile(self, user, data) -> Result:
+        profile = profile_repository.update_profile(user, **data)
+        return Result.success_result(profile, status_code=200)
 
 
-def update_my_profile(user, data):
-    return profile_repository.update_profile(user, **data)
-
+profile_service = ProfileService()

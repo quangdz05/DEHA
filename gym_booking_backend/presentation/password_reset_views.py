@@ -1,4 +1,3 @@
-from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import AllowAny
@@ -9,13 +8,17 @@ from django.utils.encoding import force_bytes, force_str
 from django.core.mail import send_mail
 from urllib.parse import urlparse
 
-class ForgotPasswordAPIView(APIView):
+from gym_booking_backend.domain.result import Result
+from gym_booking_backend.presentation.views import BaseAPIView
+
+
+class ForgotPasswordAPIView(BaseAPIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
         email = request.data.get("email", "").strip()
         if not email:
-            return Response({"message": "Vui lòng nhập địa chỉ email."}, status=status.HTTP_400_BAD_REQUEST)
+            return self.handle_result(Result.failure_result("Vui lòng nhập địa chỉ email.", status_code=400))
 
         user = User.objects.filter(email=email).first()
         # To avoid email enumeration, we return success even if the email does not exist
@@ -46,11 +49,12 @@ class ForgotPasswordAPIView(APIView):
             except Exception as e:
                 # Log the error but don't crash
                 print("Failed to send email:", e)
-                return Response({"message": "Lỗi hệ thống khi gửi email khôi phục."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                return self.handle_result(Result.failure_result("Lỗi hệ thống khi gửi email khôi phục.", status_code=500))
 
-        return Response({"message": msg}, status=status.HTTP_200_OK)
+        return self.handle_result(Result.success_result({"message": msg}, status_code=200))
 
-class ResetPasswordAPIView(APIView):
+
+class ResetPasswordAPIView(BaseAPIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
@@ -59,21 +63,21 @@ class ResetPasswordAPIView(APIView):
         new_password = request.data.get("new_password", "")
 
         if not uid or not token or not new_password:
-            return Response({"message": "Thiếu thông tin yêu cầu đặt lại mật khẩu."}, status=status.HTTP_400_BAD_REQUEST)
+            return self.handle_result(Result.failure_result("Thiếu thông tin yêu cầu đặt lại mật khẩu.", status_code=400))
 
         if len(new_password) < 8:
-            return Response({"message": "Mật khẩu mới phải có ít nhất 8 ký tự."}, status=status.HTTP_400_BAD_REQUEST)
+            return self.handle_result(Result.failure_result("Mật khẩu mới phải có ít nhất 8 ký tự.", status_code=400))
 
         try:
             uid_dec = force_str(urlsafe_base64_decode(uid))
             user = User.objects.get(pk=uid_dec)
         except (TypeError, ValueError, OverflowError, User.DoesNotExist):
-            return Response({"message": "Liên kết đặt lại mật khẩu không hợp lệ hoặc đã hết hạn."}, status=status.HTTP_400_BAD_REQUEST)
+            return self.handle_result(Result.failure_result("Liên kết đặt lại mật khẩu không hợp lệ hoặc đã hết hạn.", status_code=400))
 
         if not default_token_generator.check_token(user, token):
-            return Response({"message": "Liên kết đặt lại mật khẩu không hợp lệ hoặc đã hết hạn."}, status=status.HTTP_400_BAD_REQUEST)
+            return self.handle_result(Result.failure_result("Liên kết đặt lại mật khẩu không hợp lệ hoặc đã hết hạn.", status_code=400))
 
         user.set_password(new_password)
         user.save()
 
-        return Response({"message": "Đặt lại mật khẩu thành công!"}, status=status.HTTP_200_OK)
+        return self.handle_result(Result.success_result({"message": "Đặt lại mật khẩu thành công!"}, status_code=200))

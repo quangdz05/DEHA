@@ -1,14 +1,16 @@
 import pyotp
-from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.contrib.auth.models import User
 from rest_framework_simplejwt.tokens import RefreshToken
 
+from gym_booking_backend.domain.result import Result
+from gym_booking_backend.presentation.views import BaseAPIView
 from gym_booking_backend.presentation.jwt_views import set_refresh_cookie
 
-class TwoFactorSetupAPIView(APIView):
+
+class TwoFactorSetupAPIView(BaseAPIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
@@ -18,7 +20,7 @@ class TwoFactorSetupAPIView(APIView):
             profile = Profile.objects.create(user=request.user, full_name=request.user.username)
 
         if profile.two_factor_enabled:
-            return Response({"message": "Tài khoản của bạn đã được bật 2FA trước đó."}, status=status.HTTP_400_BAD_REQUEST)
+            return self.handle_result(Result.failure_result("Tài khoản của bạn đã được bật 2FA trước đó.", status_code=400))
 
         # Generate new base32 secret
         secret = pyotp.random_base32()
@@ -30,12 +32,13 @@ class TwoFactorSetupAPIView(APIView):
         email = request.user.email or request.user.username
         provisioning_uri = totp.provisioning_uri(name=email, issuer_name="GymBooking")
 
-        return Response({
+        return self.handle_result(Result.success_result({
             "secret": secret,
             "provisioning_uri": provisioning_uri
-        }, status=status.HTTP_200_OK)
+        }, status_code=200))
 
-class TwoFactorEnableAPIView(APIView):
+
+class TwoFactorEnableAPIView(BaseAPIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
@@ -43,20 +46,21 @@ class TwoFactorEnableAPIView(APIView):
         profile = getattr(request.user, "profile", None)
 
         if not profile or not profile.two_factor_secret:
-            return Response({"message": "Vui lòng gọi API Setup trước để khởi tạo 2FA."}, status=status.HTTP_400_BAD_REQUEST)
+            return self.handle_result(Result.failure_result("Vui lòng gọi API Setup trước để khởi tạo 2FA.", status_code=400))
 
         if profile.two_factor_enabled:
-            return Response({"message": "Tài khoản của bạn đã bật 2FA rồi."}, status=status.HTTP_400_BAD_REQUEST)
+            return self.handle_result(Result.failure_result("Tài khoản của bạn đã bật 2FA rồi.", status_code=400))
 
         totp = pyotp.TOTP(profile.two_factor_secret)
         if totp.verify(code):
             profile.two_factor_enabled = True
             profile.save(update_fields=["two_factor_enabled"])
-            return Response({"message": "Kích hoạt xác thực 2 lớp (2FA) thành công!"}, status=status.HTTP_200_OK)
+            return self.handle_result(Result.success_result({"message": "Kích hoạt xác thực 2 lớp (2FA) thành công!"}, status_code=200))
         else:
-            return Response({"message": "Mã xác minh OTP không đúng hoặc đã hết hạn."}, status=status.HTTP_400_BAD_REQUEST)
+            return self.handle_result(Result.failure_result("Mã xác minh OTP không đúng hoặc đã hết hạn.", status_code=400))
 
-class TwoFactorDisableAPIView(APIView):
+
+class TwoFactorDisableAPIView(BaseAPIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
@@ -64,7 +68,7 @@ class TwoFactorDisableAPIView(APIView):
         profile = getattr(request.user, "profile", None)
 
         if not profile or not profile.two_factor_enabled:
-            return Response({"message": "Tài khoản của bạn chưa kích hoạt 2FA."}, status=status.HTTP_400_BAD_REQUEST)
+            return self.handle_result(Result.failure_result("Tài khoản của bạn chưa kích hoạt 2FA.", status_code=400))
 
         # Require verification to disable
         totp = pyotp.TOTP(profile.two_factor_secret)
@@ -72,11 +76,12 @@ class TwoFactorDisableAPIView(APIView):
             profile.two_factor_enabled = False
             profile.two_factor_secret = ""
             profile.save(update_fields=["two_factor_enabled", "two_factor_secret"])
-            return Response({"message": "Đã hủy kích hoạt xác thực 2 lớp (2FA)."}, status=status.HTTP_200_OK)
+            return self.handle_result(Result.success_result({"message": "Đã hủy kích hoạt xác thực 2 lớp (2FA)."}, status_code=200))
         else:
-            return Response({"message": "Mã xác minh OTP không đúng hoặc đã hết hạn."}, status=status.HTTP_400_BAD_REQUEST)
+            return self.handle_result(Result.failure_result("Mã xác minh OTP không đúng hoặc đã hết hạn.", status_code=400))
 
-class TwoFactorVerifyAPIView(APIView):
+
+class TwoFactorVerifyAPIView(BaseAPIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
@@ -84,16 +89,16 @@ class TwoFactorVerifyAPIView(APIView):
         code = request.data.get("code", "").strip()
 
         if not user_id or not code:
-            return Response({"message": "Thiếu user_id hoặc mã OTP."}, status=status.HTTP_400_BAD_REQUEST)
+            return self.handle_result(Result.failure_result("Thiếu user_id hoặc mã OTP.", status_code=400))
 
         try:
             user = User.objects.get(id=user_id)
             profile = user.profile
         except (User.DoesNotExist, AttributeError):
-            return Response({"message": "Thông tin người dùng không hợp lệ."}, status=status.HTTP_400_BAD_REQUEST)
+            return self.handle_result(Result.failure_result("Thông tin người dùng không hợp lệ.", status_code=400))
 
         if not profile.two_factor_enabled or not profile.two_factor_secret:
-            return Response({"message": "Xác thực 2 lớp chưa được kích hoạt trên tài khoản này."}, status=status.HTTP_400_BAD_REQUEST)
+            return self.handle_result(Result.failure_result("Xác thực 2 lớp chưa được kích hoạt trên tài khoản này.", status_code=400))
 
         totp = pyotp.TOTP(profile.two_factor_secret)
         if totp.verify(code):
@@ -107,16 +112,17 @@ class TwoFactorVerifyAPIView(APIView):
             access_token = str(refresh.access_token)
             refresh_token = str(refresh)
 
-            response = Response({
+            data = {
                 "id": user.id,
                 "username": user.username,
                 "email": user.email,
                 "role": profile.role,
                 "full_name": profile.full_name,
                 "access": access_token
-            }, status=status.HTTP_200_OK)
+            }
             
+            response = self.handle_result(Result.success_result(data, status_code=200))
             set_refresh_cookie(response, refresh_token)
             return response
         else:
-            return Response({"message": "Mã xác minh OTP không đúng hoặc đã hết hạn."}, status=status.HTTP_400_BAD_REQUEST)
+            return self.handle_result(Result.failure_result("Mã xác minh OTP không đúng hoặc đã hết hạn.", status_code=400))
