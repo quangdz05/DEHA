@@ -62,7 +62,7 @@ async function apiFetch(path, options = {}) {
   });
 
   // Automatically refresh access token if expired (401)
-  if (response.status === 401 && !path.includes("/auth/refresh/") && !path.includes("/auth/login/")) {
+  if (response.status === 401 && getStoredUser() && !path.includes("/auth/refresh/") && !path.includes("/auth/login/")) {
     if (!isRefreshing) {
       isRefreshing = (async () => {
         try {
@@ -341,7 +341,16 @@ async function setAuthNav() {
   const page = getCurrentPage();
   const storedUser = getStoredUser();
 
-  if (storedUser && isIdleExpired()) {
+  if (!storedUser) {
+    clearUserSession();
+    renderAuthNav(null);
+    if (isProtectedPage(page)) {
+      redirectToLogin();
+    }
+    return;
+  }
+
+  if (isIdleExpired()) {
     await logoutByIdleTimeout();
     return;
   }
