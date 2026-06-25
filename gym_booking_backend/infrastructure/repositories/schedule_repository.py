@@ -1,18 +1,16 @@
 from django.db.models import F, Q
 from django.utils import timezone
-
 from gym_booking_backend.domain.constants import ScheduleStatus
 from gym_booking_backend.infrastructure.models import ClassSchedule
 from gym_booking_backend.application.interfaces.repositories.ischedule_repository import IScheduleRepository
 
 
 class DjangoScheduleRepository(IScheduleRepository):
-    def get_schedule_by_id(self, schedule_id):
-        return (
-            ClassSchedule.objects.select_related("gym_class", "trainer", "room")
-            .filter(id=schedule_id)
-            .first()
-        )
+    def get_schedule_by_id(self, schedule_id, select_for_update=False):
+        queryset = ClassSchedule.objects.select_related("gym_class", "trainer", "room")
+        if select_for_update:
+            queryset = queryset.select_for_update()
+        return queryset.filter(id=schedule_id).first()
 
     def get_available_schedules(self):
         return ClassSchedule.objects.select_related("gym_class", "trainer", "room").filter(
@@ -49,9 +47,8 @@ class DjangoScheduleRepository(IScheduleRepository):
 
     def has_trainer_conflict(self, trainer, start_time, end_time, exclude_id=None):
         """
-        VĐ #15: Kiểm tra trùng lặp lịch HLV trên cả 3 loại booking.
-        Trước đây chỉ kiểm tra ClassSchedule, nay kiểm tra thêm
-        TrainerBooking và PTBooking để tránh xếp lịch trùng.
+        Kiểm tra trùng lặp lịch HLV trên cả 3 loại booking:
+        ClassSchedule, TrainerBooking và PTBooking.
         """
         from gym_booking_backend.infrastructure.models import TrainerBooking, PTBooking
         from gym_booking_backend.domain.constants import BookingStatus, PTBookingStatus
@@ -59,7 +56,7 @@ class DjangoScheduleRepository(IScheduleRepository):
         ACTIVE_BOOKING_STATUSES = [BookingStatus.PENDING, BookingStatus.CONFIRMED]
         ACTIVE_PT_STATUSES = [PTBookingStatus.PENDING, PTBookingStatus.CONFIRMED]
 
-        # 1. ClassSchedule conflict (existing logic)
+        # 1. ClassSchedule conflict
         cs_queryset = ClassSchedule.objects.filter(trainer=trainer).filter(
             Q(start_time__lt=end_time) & Q(end_time__gt=start_time)
         )
@@ -68,7 +65,7 @@ class DjangoScheduleRepository(IScheduleRepository):
         if cs_queryset.exists():
             return True
 
-        # 2. TrainerBooking conflict (NEW)
+        # 2. TrainerBooking conflict
         tb_overlap = TrainerBooking.objects.filter(
             trainer=trainer,
             status__in=ACTIVE_BOOKING_STATUSES,
@@ -78,8 +75,7 @@ class DjangoScheduleRepository(IScheduleRepository):
         if tb_overlap:
             return True
 
-        # 3. PTBooking conflict (NEW)
-        # PTBooking uses DateField + TimeField, so we need to match the date from start_time
+        # 3. PTBooking conflict
         booking_date = start_time.date() if hasattr(start_time, 'date') else start_time
         pt_start_time = start_time.time() if hasattr(start_time, 'time') else start_time
         pt_end_time = end_time.time() if hasattr(end_time, 'time') else end_time

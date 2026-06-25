@@ -7,6 +7,10 @@ class IBookingRepository(ABC):
         pass
 
     @abstractmethod
+    def get_next_waitlisted_booking(self, schedule_id, select_for_update=False):
+        pass
+
+    @abstractmethod
     def get_user_bookings(self, user):
         pass
 
@@ -27,7 +31,7 @@ class IBookingRepository(ABC):
         pass
 
     @abstractmethod
-    def create_booking(self, user, schedule, booking_code, note=""):
+    def create_booking(self, user, schedule, booking_code, note="", status=None):
         pass
 
     @abstractmethod
@@ -44,6 +48,14 @@ class IBookingRepository(ABC):
 
     @abstractmethod
     def get_trainer_booking_by_id(self, booking_id):
+        pass
+
+    @abstractmethod
+    def has_completed_booking_for_trainer(self, user, trainer_id):
+        pass
+
+    @abstractmethod
+    def has_completed_booking_for_class(self, user, gym_class_id):
         pass
 
     @abstractmethod

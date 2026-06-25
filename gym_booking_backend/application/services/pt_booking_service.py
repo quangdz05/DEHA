@@ -1,11 +1,12 @@
-from datetime import timedelta, datetime, time
+from datetime import timedelta, datetime
 from uuid import uuid4
 from django.db import transaction
 from django.utils import timezone
 from gym_booking_backend.domain.constants import UserPTPackageStatus, PTBookingStatus, WeekdayChoices
-from gym_booking_backend.domain.exceptions import PTBookingException, MembershipRequiredException, GymException
+from gym_booking_backend.domain.exceptions import GymException
 from gym_booking_backend.infrastructure.repositories.membership_repository import membership_repository
 from gym_booking_backend.infrastructure.repositories.pt_repository import pt_repository
+from gym_booking_backend.infrastructure.repositories.trainer_repository import trainer_repository
 from gym_booking_backend.infrastructure.models import UserPTPackage, PTBooking, Trainer
 from gym_booking_backend.application.interfaces.services.ipt_booking_service import IPTBookingService
 from gym_booking_backend.domain.result import Result
@@ -38,9 +39,8 @@ class PTBookingService(IPTBookingService):
             if not package or not package.is_active:
                 return Result.failure_result("PT Package not found or is inactive.", status_code=404)
 
-            try:
-                trainer = Trainer.objects.get(id=trainer_id)
-            except Trainer.DoesNotExist:
+            trainer = trainer_repository.get_trainer_by_id(trainer_id)
+            if not trainer:
                 return Result.failure_result("Trainer not found.", status_code=404)
 
             if trainer.status != "active":
@@ -72,8 +72,7 @@ class PTBookingService(IPTBookingService):
             if not selected_weekdays:
                 return Result.failure_result("At least one weekday must be selected.", status_code=400)
 
-            active_packages = UserPTPackage.objects.filter(user=user, status=UserPTPackageStatus.ACTIVE)
-            if active_packages.exists():
+            if pt_repository.has_active_pt_package(user):
                 return Result.failure_result("You already have an active PT package subscription.", status_code=400)
 
             for wd in selected_weekdays:
@@ -146,7 +145,7 @@ class PTBookingService(IPTBookingService):
                 return Result.failure_result("Schedule conflict detected: " + "; ".join(conflicts), status_code=400)
 
             package = pt_repository.get_pt_package_by_id(package_id)
-            trainer = Trainer.objects.get(id=trainer_id)
+            trainer = trainer_repository.get_trainer_by_id(trainer_id)
 
             weekdays_list = selected_weekdays_list
 
@@ -163,23 +162,21 @@ class PTBookingService(IPTBookingService):
                     end_time = datetime.strptime(end_time, "%H:%M:%S").time()
 
             end_date = start_date + timedelta(days=package.duration_days - 1)
-            user_pt_package = UserPTPackage.objects.create(
+            user_pt_package = pt_repository.create_user_pt_package(
                 user=user,
                 trainer=trainer,
                 package=package,
                 start_date=start_date,
                 end_date=end_date,
                 total_sessions=package.total_sessions,
-                used_sessions=0,
-                status=UserPTPackageStatus.ACTIVE,
-                selected_weekdays=weekdays_list,
+                weekdays_list=weekdays_list,
                 start_time=start_time,
                 end_time=end_time,
             )
 
             bookings = []
             for preview in previews:
-                booking = PTBooking.objects.create(
+                booking = pt_repository.create_pt_booking(
                     user=user,
                     trainer=trainer,
                     user_pt_package=user_pt_package,
@@ -199,7 +196,7 @@ class PTBookingService(IPTBookingService):
     def complete_pt_booking(self, booking_id) -> Result:
         try:
             with transaction.atomic():
-                booking = PTBooking.objects.select_for_update().filter(id=booking_id).first()
+                booking = pt_repository.get_pt_booking_by_id(booking_id, select_for_update=True)
                 if not booking:
                     return Result.failure_result("Booking not found.", status_code=404)
                 if booking.status != PTBookingStatus.CONFIRMED:
@@ -208,7 +205,7 @@ class PTBookingService(IPTBookingService):
                 booking.status = PTBookingStatus.COMPLETED
                 booking.save(update_fields=["status"])
 
-                user_package = UserPTPackage.objects.select_for_update().filter(id=booking.user_pt_package_id).first()
+                user_package = pt_repository.get_user_pt_package_by_id(booking.user_pt_package_id, select_for_update=True)
                 if user_package:
                     user_package.used_sessions += 1
                     if user_package.remaining_sessions == 0:
@@ -222,7 +219,7 @@ class PTBookingService(IPTBookingService):
     def cancel_pt_booking(self, booking_id) -> Result:
         try:
             with transaction.atomic():
-                booking = PTBooking.objects.select_for_update().filter(id=booking_id).first()
+                booking = pt_repository.get_pt_booking_by_id(booking_id, select_for_update=True)
                 if not booking:
                     return Result.failure_result("Booking not found.", status_code=404)
                 if booking.status == PTBookingStatus.CANCELLED:
@@ -233,7 +230,7 @@ class PTBookingService(IPTBookingService):
                 booking.save(update_fields=["status"])
 
                 if was_completed:
-                    user_package = UserPTPackage.objects.select_for_update().filter(id=booking.user_pt_package_id).first()
+                    user_package = pt_repository.get_user_pt_package_by_id(booking.user_pt_package_id, select_for_update=True)
                     if user_package:
                         user_package.used_sessions = max(0, user_package.used_sessions - 1)
                         if user_package.status == UserPTPackageStatus.COMPLETED:
@@ -247,7 +244,7 @@ class PTBookingService(IPTBookingService):
     def cancel_user_pt_package(self, user_pt_package_id) -> Result:
         try:
             with transaction.atomic():
-                user_package = UserPTPackage.objects.select_for_update().filter(id=user_pt_package_id).first()
+                user_package = pt_repository.get_user_pt_package_by_id(user_pt_package_id, select_for_update=True)
                 if not user_package:
                     return Result.failure_result("PT Package subscription not found.", status_code=404)
                 if user_package.status == UserPTPackageStatus.CANCELLED:
@@ -256,10 +253,7 @@ class PTBookingService(IPTBookingService):
                 user_package.status = UserPTPackageStatus.CANCELLED
                 user_package.save(update_fields=["status"])
 
-                PTBooking.objects.filter(
-                    user_pt_package=user_package,
-                    status__in=[PTBookingStatus.PENDING, PTBookingStatus.CONFIRMED]
-                ).update(status=PTBookingStatus.CANCELLED)
+                pt_repository.cancel_active_bookings_for_package(user_package)
 
             return Result.success_result(user_package, status_code=200)
         except GymException as exc:

@@ -107,5 +107,57 @@ class DjangoPTRepository(IPTRepository):
         ).exists()
         return class_overlap
 
+    def has_active_pt_package(self, user):
+        from gym_booking_backend.domain.constants import UserPTPackageStatus
+        return UserPTPackage.objects.filter(user=user, status=UserPTPackageStatus.ACTIVE).exists()
+
+    def create_user_pt_package(self, user, trainer, package, start_date, end_date, total_sessions, weekdays_list, start_time, end_time):
+        from gym_booking_backend.domain.constants import UserPTPackageStatus
+        return UserPTPackage.objects.create(
+            user=user,
+            trainer=trainer,
+            package=package,
+            start_date=start_date,
+            end_date=end_date,
+            total_sessions=total_sessions,
+            used_sessions=0,
+            status=UserPTPackageStatus.ACTIVE,
+            selected_weekdays=weekdays_list,
+            start_time=start_time,
+            end_time=end_time,
+        )
+
+    def create_pt_booking(self, user, trainer, user_pt_package, booking_code, booking_date, start_time, end_time, status, note=""):
+        return PTBooking.objects.create(
+            user=user,
+            trainer=trainer,
+            user_pt_package=user_pt_package,
+            booking_code=booking_code,
+            booking_date=booking_date,
+            start_time=start_time,
+            end_time=end_time,
+            status=status,
+            note=note,
+        )
+
+    def get_pt_booking_by_id(self, booking_id, select_for_update=False):
+        queryset = PTBooking.objects.filter(id=booking_id)
+        if select_for_update:
+            queryset = queryset.select_for_update()
+        return queryset.first()
+
+    def get_user_pt_package_by_id(self, package_id, select_for_update=False):
+        queryset = UserPTPackage.objects.filter(id=package_id)
+        if select_for_update:
+            queryset = queryset.select_for_update()
+        return queryset.first()
+
+    def cancel_active_bookings_for_package(self, user_pt_package):
+        from gym_booking_backend.domain.constants import PTBookingStatus
+        return PTBooking.objects.filter(
+            user_pt_package=user_pt_package,
+            status__in=[PTBookingStatus.PENDING, PTBookingStatus.CONFIRMED],
+        ).update(status=PTBookingStatus.CANCELLED)
+
 
 pt_repository = DjangoPTRepository()

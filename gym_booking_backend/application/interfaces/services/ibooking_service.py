@@ -60,5 +60,9 @@ class IBookingService(ABC):
         pass
 
     @abstractmethod
-    def create_trainer_monthly_booking(self, user, trainer_id, start_date, end_date, months, sessions_per_week, preferred_time=None, note="") -> Result:
+    def create_trainer_monthly_booking(self, user, trainer_id, start_date, months=1, sessions_per_week=3, preferred_time=None, note="") -> Result:
+        pass
+
+    @abstractmethod
+    def update_admin_trainer_monthly_booking_status(self, booking_id, new_status) -> Result:
         pass

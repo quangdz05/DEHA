@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 
 class IScheduleRepository(ABC):
     @abstractmethod
-    def get_schedule_by_id(self, schedule_id):
+    def get_schedule_by_id(self, schedule_id, select_for_update=False):
         pass
 
     @abstractmethod

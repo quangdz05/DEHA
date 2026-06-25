@@ -1,5 +1,4 @@
 from django.db.models import Q
-
 from gym_booking_backend.domain.constants import BookingStatus, PTBookingStatus
 from gym_booking_backend.infrastructure.models import Booking, TrainerBooking, TrainerMonthlyBooking, PTBooking
 from gym_booking_backend.application.interfaces.repositories.ibooking_repository import IBookingRepository
@@ -10,6 +9,15 @@ ACTIVE_BOOKING_STATUSES = [BookingStatus.PENDING, BookingStatus.CONFIRMED]
 class DjangoBookingRepository(IBookingRepository):
     def get_booking_by_id(self, booking_id):
         return Booking.objects.select_related("schedule", "schedule__gym_class", "schedule__trainer", "schedule__room").filter(id=booking_id).first()
+
+    def get_next_waitlisted_booking(self, schedule_id, select_for_update=False):
+        queryset = Booking.objects.filter(
+            schedule_id=schedule_id,
+            status=BookingStatus.WAITLIST
+        ).order_by("created_at", "id")
+        if select_for_update:
+            queryset = queryset.select_for_update()
+        return queryset.first()
 
     def get_user_bookings(self, user):
         return Booking.objects.select_related("schedule", "schedule__gym_class", "schedule__trainer", "schedule__room").filter(user=user)
@@ -92,8 +100,11 @@ class DjangoBookingRepository(IBookingRepository):
 
         return class_overlap or trainer_query.exists() or pt_overlap
 
-    def create_booking(self, user, schedule, booking_code, note=""):
-        return Booking.objects.create(user=user, schedule=schedule, booking_code=booking_code, note=note)
+    def create_booking(self, user, schedule, booking_code, note="", status=None):
+        kwargs = {"user": user, "schedule": schedule, "booking_code": booking_code, "note": note}
+        if status is not None:
+            kwargs["status"] = status
+        return Booking.objects.create(**kwargs)
 
     def count_user_bookings_in_week(self, user, start_dt, end_dt):
         class_count = Booking.objects.filter(
@@ -118,6 +129,20 @@ class DjangoBookingRepository(IBookingRepository):
 
     def get_trainer_booking_by_id(self, booking_id):
         return TrainerBooking.objects.select_related("trainer", "user__profile").filter(id=booking_id).first()
+
+    def has_completed_booking_for_trainer(self, user, trainer_id):
+        return Booking.objects.filter(
+            user=user,
+            status=BookingStatus.COMPLETED,
+            schedule__trainer_id=trainer_id,
+        ).exists()
+
+    def has_completed_booking_for_class(self, user, gym_class_id):
+        return Booking.objects.filter(
+            user=user,
+            status=BookingStatus.COMPLETED,
+            schedule__gym_class_id=gym_class_id,
+        ).exists()
 
     def create_trainer_booking(self, user, trainer, booking_code, start_time, end_time, note=""):
         return TrainerBooking.objects.create(

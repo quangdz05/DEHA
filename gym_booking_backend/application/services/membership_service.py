@@ -3,9 +3,10 @@ from django.db import transaction
 from django.utils import timezone
 
 from gym_booking_backend.application.validators import membership_validator
-from gym_booking_backend.domain.constants import MembershipStatus, UserRole
+from gym_booking_backend.domain.constants import InvoiceItemType, InvoiceStatus, MembershipStatus, PaymentStatus, UserRole
 from gym_booking_backend.domain.exceptions import GymException
 from gym_booking_backend.infrastructure.repositories.membership_repository import membership_repository
+from gym_booking_backend.infrastructure.repositories.invoice_repository import invoice_repository
 from gym_booking_backend.application.interfaces.services.imembership_service import IMembershipService
 from gym_booking_backend.domain.result import Result
 
@@ -21,12 +22,7 @@ class MembershipService(IMembershipService):
             if not package:
                 return Result.failure_result("Membership package not found.", status_code=404)
 
-            from gym_booking_backend.infrastructure.models import UserMembership
-            has_active_or_pending = UserMembership.objects.filter(
-                user=user,
-                status__in=[MembershipStatus.ACTIVE, MembershipStatus.PENDING]
-            ).exists()
-            if has_active_or_pending:
+            if membership_repository.has_active_or_pending_membership(user):
                 return Result.failure_result("Bạn đã có gói tập đang hoạt động hoặc chờ thanh toán.", status_code=400)
 
             start_date = timezone.localdate()
@@ -35,16 +31,15 @@ class MembershipService(IMembershipService):
             
             membership = membership_repository.create_user_membership(user, package, start_date, end_date)
 
-            from gym_booking_backend.infrastructure.models import Invoice, InvoiceItem, InvoiceStatus, InvoiceItemType
             from uuid import uuid4
             invoice_number = f"INV-{timezone.now():%Y%m%d}-{uuid4().hex[:6].upper()}"
-            invoice = Invoice.objects.create(
+            invoice = invoice_repository.create_invoice(
                 user=user,
                 invoice_number=invoice_number,
                 total_amount=package.price,
                 status=InvoiceStatus.UNPAID
             )
-            InvoiceItem.objects.create(
+            invoice_repository.create_invoice_item(
                 invoice=invoice,
                 item_type=InvoiceItemType.MEMBERSHIP,
                 object_id=membership.id,
@@ -66,14 +61,14 @@ class MembershipService(IMembershipService):
             membership.save(update_fields=["status"])
 
             if old_status == MembershipStatus.PENDING:
-                from gym_booking_backend.infrastructure.models import InvoiceItem, InvoiceStatus, Payment, PaymentStatus, InvoiceItemType
-                invoice_item = InvoiceItem.objects.filter(item_type=InvoiceItemType.MEMBERSHIP, object_id=membership.id).first()
+                invoice_item = invoice_repository.get_invoice_item_by_membership(membership.id)
                 if invoice_item and invoice_item.invoice:
                     invoice = invoice_item.invoice
                     if invoice.status == InvoiceStatus.UNPAID:
                         invoice.status = InvoiceStatus.CANCELLED
                         invoice.save(update_fields=["status", "updated_at"])
                         
+                        from gym_booking_backend.infrastructure.models import Payment
                         Payment.objects.filter(invoice=invoice, status=PaymentStatus.PENDING).update(status=PaymentStatus.FAILED)
 
             return Result.success_result(membership, "Membership cancelled", status_code=200)

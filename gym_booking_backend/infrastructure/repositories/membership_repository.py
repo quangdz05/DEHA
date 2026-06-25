@@ -1,5 +1,4 @@
 from django.utils import timezone
-
 from gym_booking_backend.domain.constants import CommonStatus, MembershipStatus
 from gym_booking_backend.infrastructure.models import MembershipPackage, UserMembership
 from gym_booking_backend.application.interfaces.repositories.imembership_repository import IMembershipRepository
@@ -37,6 +36,12 @@ class DjangoMembershipRepository(IMembershipRepository):
         return UserMembership.objects.filter(status=MembershipStatus.ACTIVE, end_date__lt=date).update(
             status=MembershipStatus.EXPIRED
         )
+
+    def has_active_or_pending_membership(self, user):
+        return UserMembership.objects.filter(
+            user=user,
+            status__in=[MembershipStatus.ACTIVE, MembershipStatus.PENDING]
+        ).exists()
 
 
 membership_repository = DjangoMembershipRepository()

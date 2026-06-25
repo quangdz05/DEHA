@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from gym_booking_backend.domain.exceptions import InvalidScheduleException, GymException
+from gym_booking_backend.domain.exceptions import GymException
 from gym_booking_backend.infrastructure.repositories.schedule_repository import schedule_repository
 from gym_booking_backend.application.interfaces.services.ischedule_service import IScheduleService
 from gym_booking_backend.domain.result import Result

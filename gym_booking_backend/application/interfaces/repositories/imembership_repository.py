@@ -33,3 +33,7 @@ class IMembershipRepository(ABC):
     @abstractmethod
     def expire_memberships_before(self, date):
         pass
+
+    @abstractmethod
+    def has_active_or_pending_membership(self, user):
+        pass

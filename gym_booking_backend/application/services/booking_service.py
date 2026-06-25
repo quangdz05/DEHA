@@ -1,12 +1,11 @@
 from uuid import uuid4
 from datetime import timedelta
-
 from django.db import transaction
 from django.utils import timezone
 
 from gym_booking_backend.application.validators import booking_validator
 from gym_booking_backend.domain.constants import BookingStatus, CommonStatus, ScheduleStatus
-from gym_booking_backend.domain.exceptions import BookingException, GymException
+from gym_booking_backend.domain.exceptions import GymException
 from gym_booking_backend.infrastructure.repositories.booking_repository import booking_repository
 from gym_booking_backend.infrastructure.repositories.schedule_repository import schedule_repository
 from gym_booking_backend.application.interfaces.services.ibooking_service import IBookingService

@@ -4,6 +4,7 @@ from django.db import IntegrityError, transaction
 from gym_booking_backend.domain.exceptions import GymException
 from gym_booking_backend.infrastructure.repositories.profile_repository import profile_repository
 from gym_booking_backend.infrastructure.repositories.user_repository import user_repository
+from gym_booking_backend.infrastructure.repositories.trainer_repository import trainer_repository
 from gym_booking_backend.application.interfaces.services.iauth_service import IAuthService
 from gym_booking_backend.domain.result import Result
 
@@ -22,16 +23,10 @@ class AuthService(IAuthService):
                 full_name = f"{first_name} {last_name}".strip() or username
                 profile_repository.update_profile(user, full_name=full_name, role=role)
                 if role == "trainer":
-                    from gym_booking_backend.domain.constants import CommonStatus
-                    from gym_booking_backend.infrastructure.models import Trainer
-                    Trainer.objects.create(
+                    trainer_repository.create_trainer(
                         user=user,
                         name=full_name,
                         email=email,
-                        phone="",
-                        specialty="General Trainer",
-                        experience_years=1,
-                        status=CommonStatus.ACTIVE
                     )
                 return Result.success_result(user, "User registered successfully", status_code=201)
         except IntegrityError as exc:

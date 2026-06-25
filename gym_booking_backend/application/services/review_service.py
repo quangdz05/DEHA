@@ -1,7 +1,8 @@
-from gym_booking_backend.domain.exceptions import ReviewException, GymException
+from gym_booking_backend.domain.exceptions import GymException
 from gym_booking_backend.infrastructure.repositories.class_repository import class_repository
 from gym_booking_backend.infrastructure.repositories.review_repository import review_repository
 from gym_booking_backend.infrastructure.repositories.trainer_repository import trainer_repository
+from gym_booking_backend.infrastructure.repositories.booking_repository import booking_repository
 from gym_booking_backend.application.interfaces.services.ireview_service import IReviewService
 from gym_booking_backend.domain.result import Result
 
@@ -18,20 +19,13 @@ class ReviewService(IReviewService):
 
             trainer = None
             gym_class = None
-            from gym_booking_backend.infrastructure.models import Booking
-            from gym_booking_backend.domain.constants import BookingStatus
 
             if trainer_id:
                 trainer = trainer_repository.get_trainer_by_id(trainer_id)
                 if not trainer:
                     return Result.failure_result("Trainer not found.", status_code=404)
                 
-                has_completed_booking = Booking.objects.filter(
-                    user=user,
-                    status=BookingStatus.COMPLETED,
-                    schedule__trainer_id=trainer_id
-                ).exists()
-                if not has_completed_booking:
+                if not booking_repository.has_completed_booking_for_trainer(user, trainer_id):
                     return Result.failure_result("You can only review a trainer if you have completed a class with them.", status_code=400)
                     
                 if review_repository.has_user_reviewed_trainer(user, trainer):
@@ -42,12 +36,7 @@ class ReviewService(IReviewService):
                 if not gym_class:
                     return Result.failure_result("Class not found.", status_code=404)
                 
-                has_completed_booking = Booking.objects.filter(
-                    user=user,
-                    status=BookingStatus.COMPLETED,
-                    schedule__gym_class_id=gym_class_id
-                ).exists()
-                if not has_completed_booking:
+                if not booking_repository.has_completed_booking_for_class(user, gym_class_id):
                     return Result.failure_result("You can only review a class if you have attended and completed it.", status_code=400)
                     
                 if review_repository.has_user_reviewed_class(user, gym_class):
