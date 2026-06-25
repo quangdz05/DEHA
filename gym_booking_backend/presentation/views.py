@@ -135,6 +135,13 @@ class ProfileMeAPIView(BaseAPIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        if request.user.is_authenticated:
+            from django.contrib.auth import login as django_login
+            if not getattr(request.user, "backend", None):
+                request.user.backend = 'django.contrib.auth.backends.ModelBackend'
+            if int(request.session.get('_auth_user_id', 0)) != request.user.id:
+                django_login(request, request.user)
+
         result = profile_service.get_my_profile(request.user)
         return self.handle_result(result, ProfileSerializer)
 

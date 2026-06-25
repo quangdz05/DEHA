@@ -2,7 +2,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import AllowAny
 from rest_framework.throttling import ScopedRateThrottle
-from django.contrib.auth import authenticate
+from django.contrib.auth import authenticate, login as django_login, logout as django_logout
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 from django.contrib.auth.models import User
@@ -71,7 +71,9 @@ class LoginAPIView(BaseAPIView):
             "full_name": profile.full_name,
             "access": access_token
         }
-        
+        # Sync with Django session
+        django_login(request, user)
+
         response = self.handle_result(Result.success_result(data, status_code=200))
         set_refresh_cookie(response, refresh_token)
         return response
@@ -94,6 +96,10 @@ class TokenRefreshAPIView(BaseAPIView):
         except (TokenError, InvalidToken, User.DoesNotExist) as e:
             return self.handle_result(Result.failure_result("Invalid refresh token.", status_code=401))
 
+        # Sync with Django session
+        user.backend = 'django.contrib.auth.backends.ModelBackend'
+        django_login(request, user)
+
         data = {
             "access": access_token,
             "id": user.id,
@@ -110,6 +116,7 @@ class LogoutAPIView(BaseAPIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
+        django_logout(request)
         response = self.handle_result(Result.success_result({"message": "Logged out successfully."}, status_code=200))
         response.delete_cookie("refresh_token", path="/api/auth/refresh/")
         return response

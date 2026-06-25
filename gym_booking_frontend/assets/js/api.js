@@ -3,7 +3,7 @@ const API_BASE = "http://127.0.0.1:8000/api";
 const SESSION_TIMEOUT_MS = 30 * 60 * 1000;
 const SESSION_KEEP_ALIVE_MS = 5 * 60 * 1000;
 const LAST_ACTIVITY_KEY = "gymLastActivityAt";
-const LOGIN_PAGE = "login.html";
+const LOGIN_PAGE = "/login.html";
 
 const PUBLIC_PAGES = new Set([
   "index.html",
@@ -31,7 +31,14 @@ const ROLE_RULES = {
 let idleTimerId = null;
 let lastActivityWriteAt = 0;
 let lastKeepAliveAt = 0;
-let accessToken = null;
+let accessToken = (() => {
+  try {
+    const user = JSON.parse(localStorage.getItem("gymUser") || "null");
+    return user ? user.access : null;
+  } catch (_) {
+    return null;
+  }
+})();
 let isRefreshing = null; // Global promise for refresh token locking
 
 async function apiFetch(path, options = {}) {
@@ -176,10 +183,13 @@ function getStoredUser() {
 }
 
 function saveUserSession(user) {
-  if (user && user.access) {
-    accessToken = user.access;
+  if (!user) return;
+  const current = getStoredUser() || {};
+  const merged = { ...current, ...user };
+  if (merged.access) {
+    accessToken = merged.access;
   }
-  localStorage.setItem("gymUser", JSON.stringify(user));
+  localStorage.setItem("gymUser", JSON.stringify(merged));
   markUserActivity(true);
 }
 
@@ -229,8 +239,8 @@ function renderAuthNav(user) {
 
 function redirectToLogin() {
   const page = getCurrentPage();
-  if (page === LOGIN_PAGE) return;
-  const next = encodeURIComponent(`${page}${location.search || ""}`);
+  if (page === "login.html") return;
+  const next = encodeURIComponent(`${location.pathname}${location.search || ""}`);
   location.href = `${LOGIN_PAGE}?next=${next}`;
 }
 
@@ -241,14 +251,14 @@ function redirectAfterLogin(user) {
     return;
   }
   if (user?.role === "admin") {
-    location.href = "admin-dashboard.html";
+    location.href = "/admin-dashboard.html";
     return;
   }
   if (user?.role === "trainer") {
-    location.href = "trainer-dashboard.html";
+    location.href = "/trainer-dashboard.html";
     return;
   }
-  location.href = "index.html";
+  location.href = "/index.html";
 }
 
 function enforcePageRole(user) {
@@ -257,7 +267,7 @@ function enforcePageRole(user) {
   if (!allowedRoles || !user) return;
   if (!allowedRoles.includes(user.role)) {
     showAlert("Tai khoan cua ban khong co quyen truy cap trang nay.", "warning");
-    location.href = "index.html";
+    location.href = "/index.html";
   }
 }
 
@@ -362,7 +372,7 @@ async function setAuthNav() {
     renderAuthNav(sessionUser);
     enforcePageRole(sessionUser);
 
-    if (page === LOGIN_PAGE) {
+    if (page === "login.html") {
       redirectAfterLogin(sessionUser);
     }
   } catch (_) {
