@@ -25,13 +25,12 @@
       <div id="nav" class="collapse navbar-collapse">
         <ul class="navbar-nav ms-auto align-items-lg-center">
           <li class="nav-item"><a class="nav-link" href="classes.html">Lớp tập</a></li>
-          <li class="nav-item"><a class="nav-link" href="schedules.html">Lịch tập</a></li>
           <li class="nav-item"><a class="nav-link" href="trainers.html">HLV</a></li>
           <li class="nav-item"><a class="nav-link" href="packages.html">Gói tập</a></li>
-          <li class="nav-item"><a class="nav-link" href="/pt-packages/">Gói PT</a></li>
+          <li class="nav-item"><a class="nav-link" href="pt-packages.html">Gói PT</a></li>
           <li class="nav-item d-none" data-role="member"><a class="nav-link" href="my-bookings.html">Lịch của tôi</a></li>
-          <li class="nav-item d-none" data-role="member"><a class="nav-link" href="/my-pt-packages/">Gói PT của tôi</a></li>
-          <li class="nav-item d-none" data-role="trainer"><a class="nav-link active" href="trainer-dashboard.html">Lịch dạy HLV</a></li>
+          <li class="nav-item d-none" data-role="member"><a class="nav-link" href="my-pt-packages.html">Gói PT của tôi</a></li>
+          <li class="nav-item d-none" data-role="trainer,admin"><a class="nav-link active" href="trainer-dashboard.html">Lịch dạy HLV</a></li>
           <li class="nav-item d-none" data-role="admin"><a class="nav-link" href="admin-dashboard.html">Quản lý Admin</a></li>
           <li class="nav-item" data-auth="guest"><a class="nav-link" href="login.html">Đăng nhập</a></li>
           <li class="nav-item d-none" data-auth="user">
@@ -93,25 +92,25 @@
       <!-- Personal Training Booking Section -->
       <div class="card border-0 shadow-sm rounded-3 mt-4">
         <div class="card-header bg-white py-3">
-          <h5 class="fw-bold mb-0 text-dark"><i class="bi bi-person-check text-brand me-2"></i>Lich 1-1 voi hoi vien</h5>
+          <h5 class="fw-bold mb-0 text-dark"><i class="bi bi-person-check text-brand me-2"></i>Lịch 1-1 với hội viên</h5>
         </div>
         <div class="card-body p-0">
           <div class="table-responsive">
             <table class="table table-hover align-middle mb-0">
               <thead class="table-light">
                 <tr>
-                  <th>Hoi vien</th>
-                  <th>Bat dau</th>
-                  <th>Ket thuc</th>
-                  <th>Trang thai</th>
-                  <th>Ghi chu</th>
-                  <th>Diem danh</th>
+                  <th>Hội viên</th>
+                  <th>Bắt đầu</th>
+                  <th>Kết thúc</th>
+                  <th>Trạng thái</th>
+                  <th>Ghi chú</th>
+                  <th>Điểm danh</th>
                 </tr>
               </thead>
               <tbody id="trainerPersonalBookingRows">
                 <tr>
                   <td colspan="6" class="text-center py-4 text-muted">
-                    <div class="spinner-border spinner-border-sm text-brand me-1"></div> Dang tai lich 1-1...
+                    <div class="spinner-border spinner-border-sm text-brand me-1"></div> Đang tải lịch 1-1...
                   </td>
                 </tr>
               </tbody>
@@ -122,23 +121,23 @@
 
       <div class="card border-0 shadow-sm rounded-3 mt-4">
         <div class="card-header bg-white py-3">
-          <h5 class="fw-bold mb-0 text-dark"><i class="bi bi-calendar-month text-brand me-2"></i>Hoc vien dang ky theo thang</h5>
+          <h5 class="fw-bold mb-0 text-dark"><i class="bi bi-calendar-month text-brand me-2"></i>Học viên đăng ký theo tháng</h5>
         </div>
         <div class="card-body p-0">
           <div class="table-responsive">
             <table class="table table-hover align-middle mb-0">
               <thead class="table-light">
                 <tr>
-                  <th>Hoc vien</th>
-                  <th>Thoi gian</th>
-                  <th>Tan suat</th>
-                  <th>Gio mong muon</th>
-                  <th>Trang thai</th>
-                  <th>Hanh dong</th>
+                  <th>Học viên</th>
+                  <th>Thời gian</th>
+                  <th>Tần suất</th>
+                  <th>Giờ mong muốn</th>
+                  <th>Trạng thái</th>
+                  <th>Hành động</th>
                 </tr>
               </thead>
               <tbody id="trainerMonthlyStudentRows">
-                <tr><td colspan="6" class="text-center py-4 text-muted">Dang tai...</td></tr>
+                <tr><td colspan="6" class="text-center py-4 text-muted">Đang tải...</td></tr>
               </tbody>
             </table>
           </div>
@@ -203,7 +202,7 @@
       // Validate role first
       const userStr = localStorage.getItem("gymUser");
       const user = userStr ? JSON.parse(userStr) : null;
-      if (!user || user.role !== "trainer") {
+      if (!user || (user.role !== "trainer" && user.role !== "admin")) {
         alert("Bạn không có quyền truy cập trang này!");
         location.href = "index.html";
         return;

@@ -15,12 +15,14 @@ const PUBLIC_PAGES = new Set([
   "schedules.html",
   "forgot-password.html",
   "reset-password.html",
+  "pt-packages.html",
 ]);
 
 const PROTECTED_PAGES = new Set([
   "my-bookings.html",
   "admin-dashboard.html",
   "trainer-dashboard.html",
+  "my-pt-packages.html",
 ]);
 
 const ROLE_RULES = {
@@ -337,6 +339,7 @@ async function logoutByIdleTimeout() {
 }
 
 async function logout() {
+  if (!confirm("Bạn có chắc chắn muốn đăng xuất không?")) return;
   try {
     await apiFetch("/auth/logout/", { method: "POST", body: "{}", skipAuthRedirect: true });
   } catch (_) {
@@ -384,10 +387,120 @@ async function setAuthNav() {
   }
 }
 
+function injectLayout() {
+  const currentPage = getCurrentPage();
+
+  // Favicon injection
+  let favLink = document.querySelector("link[rel='icon']");
+  if (!favLink) {
+    favLink = document.createElement("link");
+    favLink.rel = "icon";
+    favLink.type = "image/png";
+    favLink.href = "assets/images/logo.png";
+    document.head.appendChild(favLink);
+  }
+
+  // Meta description injection
+  let metaDesc = document.querySelector("meta[name='description']");
+  if (!metaDesc) {
+    metaDesc = document.createElement("meta");
+    metaDesc.name = "description";
+    metaDesc.content = "Gym Booking - Giải pháp quản lý đặt lịch tập gym, huấn luyện viên cá nhân và lớp học thông minh.";
+    document.head.appendChild(metaDesc);
+  }
+
+  // Navbar
+  let navEl = document.querySelector("nav.navbar");
+  if (navEl) navEl.remove();
+  
+  navEl = document.createElement("nav");
+  navEl.className = "navbar navbar-expand-lg navbar-dark fixed-top";
+  navEl.innerHTML = `
+    <div class="container">
+      <a class="navbar-brand fw-bold" href="index.html"><img class="brand-logo" src="assets/images/logo.png" alt="">Gym Booking</a>
+      <button class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#nav" aria-label="Mở menu"><span class="navbar-toggler-icon"></span></button>
+      <div id="nav" class="collapse navbar-collapse">
+        <ul class="navbar-nav ms-auto align-items-lg-center">
+          <li class="nav-item"><a class="nav-link" href="classes.html">Lớp tập</a></li>
+          <li class="nav-item"><a class="nav-link" href="trainers.html">HLV</a></li>
+          <li class="nav-item"><a class="nav-link" href="packages.html">Gói tập</a></li>
+          <li class="nav-item"><a class="nav-link" href="pt-packages.html">Gói PT</a></li>
+          <li class="nav-item d-none" data-role="member"><a class="nav-link" href="my-bookings.html">Lịch của tôi</a></li>
+          <li class="nav-item d-none" data-role="member"><a class="nav-link" href="my-pt-packages.html">Gói PT của tôi</a></li>
+          <li class="nav-item d-none" data-role="trainer,admin"><a class="nav-link" href="trainer-dashboard.html">Lịch dạy HLV</a></li>
+          <li class="nav-item d-none" data-role="admin"><a class="nav-link" href="admin-dashboard.html">Quản lý Admin</a></li>
+          <li class="nav-item" data-auth="guest"><a class="nav-link" href="login.html">Đăng nhập</a></li>
+          <li class="nav-item d-none" data-auth="user">
+            <span id="navUserName" class="me-lg-2 text-light"></span>
+            <button class="btn btn-outline-light btn-sm ms-lg-2" onclick="logout()">Đăng xuất</button>
+          </li>
+        </ul>
+      </div>
+    </div>
+  `;
+  document.body.insertBefore(navEl, document.body.firstChild);
+
+  // Set active link in navbar
+  navEl.querySelectorAll(".nav-link").forEach(link => {
+    const href = link.getAttribute("href");
+    if (href && (currentPage === href || (currentPage === "index.html" && href === "index.html") || (currentPage === "" && href === "index.html"))) {
+      link.classList.add("active");
+    } else {
+      link.classList.remove("active");
+    }
+  });
+
+  // Footer
+  let footerEl = document.querySelector("footer.footer");
+  if (footerEl) footerEl.remove();
+  
+  footerEl = document.createElement("footer");
+  footerEl.className = "footer py-5 bg-dark text-light mt-auto";
+  footerEl.innerHTML = `
+    <div class="container">
+      <div class="row g-4">
+        <div class="col-md-4">
+          <a class="navbar-brand fw-bold text-white fs-4 d-flex align-items-center gap-2 mb-3" href="index.html">
+            <img class="brand-logo" src="assets/images/logo.png" alt="" style="width: 32px; height: 32px; border-radius: 8px;">
+            Gym Booking
+          </a>
+          <p class="text-secondary small">Giải pháp quản lý phòng tập thông minh, đặt lịch huấn luyện viên 1-1 và quản lý gói tập tối ưu.</p>
+        </div>
+        <div class="col-md-4">
+          <h6 class="text-uppercase fw-bold text-white mb-3">Liên kết nhanh</h6>
+          <ul class="list-unstyled text-secondary small d-flex flex-column gap-2">
+            <li><a href="classes.html" class="text-secondary">Lớp tập</a></li>
+            <li><a href="trainers.html" class="text-secondary">Huấn luyện viên (HLV)</a></li>
+            <li><a href="packages.html" class="text-secondary">Gói tập hội viên</a></li>
+            <li><a href="pt-packages.html" class="text-secondary">Gói PT cá nhân</a></li>
+          </ul>
+        </div>
+        <div class="col-md-4">
+          <h6 class="text-uppercase fw-bold text-white mb-3">Liên hệ</h6>
+          <p class="text-secondary small mb-2"><i class="bi bi-geo-alt me-2 text-brand"></i> Tầng 5, Tòa nhà DEHA, Hà Nội</p>
+          <p class="text-secondary small mb-2"><i class="bi bi-telephone me-2 text-brand"></i> Hotline: 1900 6868</p>
+          <p class="text-secondary small"><i class="bi bi-envelope me-2 text-brand"></i> support@gymbooking.vn</p>
+        </div>
+      </div>
+      <hr class="border-secondary my-4">
+      <div class="d-flex flex-column flex-sm-row justify-content-between align-items-center gap-2">
+        <span class="text-secondary small">© 2026 Gym Booking. Tất cả quyền được bảo lưu.</span>
+        <div class="d-flex gap-3">
+          <a href="#" class="text-secondary fs-5"><i class="bi bi-facebook"></i></a>
+          <a href="#" class="text-secondary fs-5"><i class="bi bi-instagram"></i></a>
+          <a href="#" class="text-secondary fs-5"><i class="bi bi-youtube"></i></a>
+        </div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(footerEl);
+}
+
 window.markUserActivity = markUserActivity;
 window.logout = logout;
 
 document.addEventListener("DOMContentLoaded", () => {
+  injectLayout();
   bindIdleActivityEvents();
   setAuthNav();
 });

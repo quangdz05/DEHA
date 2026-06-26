@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Gói tập cá nhân (PT) - Gym Booking</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <link rel="stylesheet" href="assets/css/app.css">
+  <style>
+    .weekdays-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 8px;
+    }
+    .weekday-checkbox-wrapper {
+      flex: 1 0 calc(25% - 10px);
+      background: #fafafa;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 14px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      user-select: none;
+      text-align: center;
+    }
+    .weekday-checkbox-wrapper:hover {
+      border-color: var(--primary);
+      background: rgba(244, 81, 30, 0.02);
+    }
+    .weekday-checkbox-wrapper.active {
+      border-color: var(--primary);
+      background: rgba(244, 81, 30, 0.08);
+    }
+    .weekday-checkbox-wrapper input {
+      display: none;
+    }
+    .weekday-label-text {
+      font-weight: 700;
+      font-size: 0.9rem;
+      color: var(--text);
+    }
+    .weekday-checkbox-wrapper.active .weekday-label-text {
+      color: var(--primary-dark);
+    }
+  </style>
+</head>
+<body onload="initPtPackagesPage()">
+  <nav class="navbar navbar-expand-lg navbar-dark fixed-top">
+    <div class="container">
+      <a class="navbar-brand fw-bold" href="index.html"><img class="brand-logo" src="assets/images/logo.png" alt="">Gym Booking</a>
+      <button class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#nav" aria-label="Mở menu"><span class="navbar-toggler-icon"></span></button>
+      <div id="nav" class="collapse navbar-collapse">
+        <ul class="navbar-nav ms-auto align-items-lg-center">
+          <li class="nav-item"><a class="nav-link" href="classes.html">Lớp tập</a></li>
+          <li class="nav-item"><a class="nav-link" href="trainers.html">HLV</a></li>
+          <li class="nav-item"><a class="nav-link" href="packages.html">Gói tập</a></li>
+          <li class="nav-item"><a class="nav-link active" href="pt-packages.html">Gói PT</a></li>
+          <li class="nav-item d-none" data-role="member"><a class="nav-link" href="my-bookings.html">Lịch của tôi</a></li>
+          <li class="nav-item d-none" data-role="member"><a class="nav-link" href="my-pt-packages.html">Gói PT của tôi</a></li>
+          <li class="nav-item d-none" data-role="trainer,admin"><a class="nav-link" href="trainer-dashboard.html">Lịch dạy HLV</a></li>
+          <li class="nav-item d-none" data-role="admin"><a class="nav-link" href="admin-dashboard.html">Quản lý Admin</a></li>
+          <li class="nav-item" data-auth="guest"><a class="nav-link" href="login.html">Đăng nhập</a></li>
+          <li class="nav-item d-none" data-auth="user">
+            <span id="navUserName" class="me-lg-2"></span>
+            <button class="btn btn-outline-light btn-sm ms-lg-2" onclick="logout()">Đăng xuất</button>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </nav>
+
+  <main class="page section">
+    <div class="container">
+      <div id="messages"></div>
+      
+      <div class="row mb-5">
+        <div class="col-lg-8 mx-auto text-center">
+          <h1 class="page-title fw-bold mb-2">Gói tập với Huấn Luyện Viên Cá Nhân (PT)</h1>
+          <p class="page-subtitle text-muted">Lựa chọn gói tập phù hợp để nhận lịch trình tập luyện riêng biệt cùng sự đồng hành của huấn luyện viên chuyên nghiệp.</p>
+        </div>
+      </div>
+
+      <div id="alertContainer"></div>
+
+      <!-- Packages Grid -->
+      <div id="ptPackagesList" class="row g-4 justify-content-center mb-5">
+        <div class="col-12 text-center py-5">
+          <div class="spinner-border text-brand" role="status">
+            <span class="visually-hidden">Đang tải...</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Booking Form and Preview (Hidden until a package is selected and user is eligible) -->
+      <div id="bookingSection" class="d-none pt-4 border-top border-light">
+        <div class="d-flex align-items-center gap-3 mb-4">
+          <h2 class="fw-bold text-dark mb-0"><i class="bi bi-calendar-plus text-brand me-2"></i>Đăng ký lịch PT theo tháng</h2>
+        </div>
+
+        <div class="row g-4">
+          <!-- Form Column -->
+          <div class="col-lg-6">
+            <div class="table-card p-4">
+              <h3 class="h5 fw-bold text-dark mb-4 border-bottom pb-2">Thông tin đăng ký</h3>
+              
+              <form id="ptBookingForm" onsubmit="submitPtBooking(event)" novalidate>
+                <div class="mb-3">
+                  <label class="form-label fw-bold text-dark" for="packageSelect">Gói PT đã chọn</label>
+                  <select id="packageSelect" class="form-select" required>
+                    <option value="">-- Chọn gói PT --</option>
+                  </select>
+                </div>
+
+                <div class="mb-3">
+                  <label class="form-label fw-bold text-dark" for="trainerSelect">Huấn luyện viên (PT)</label>
+                  <select id="trainerSelect" class="form-select" required>
+                    <option value="">-- Chọn Huấn luyện viên --</option>
+                  </select>
+                </div>
+
+                <div class="mb-3">
+                  <label class="form-label fw-bold text-dark" for="startDateInput">Ngày bắt đầu tập</label>
+                  <input type="date" id="startDateInput" class="form-control" required>
+                  <div class="form-text small">Hệ thống sẽ bắt đầu tính lịch tuần tự kể từ ngày này.</div>
+                </div>
+
+                <div class="mb-4">
+                  <label class="form-label fw-bold text-dark">Các thứ trong tuần muốn tập</label>
+                  <div class="weekdays-grid">
+                    <label class="weekday-checkbox-wrapper" id="wrapper-wd-0">
+                      <input type="checkbox" name="weekdays" value="0" class="wd-checkbox">
+                      <span class="weekday-label-text">T2</span>
+                    </label>
+                    <label class="weekday-checkbox-wrapper" id="wrapper-wd-1">
+                      <input type="checkbox" name="weekdays" value="1" class="wd-checkbox">
+                      <span class="weekday-label-text">T3</span>
+                    </label>
+                    <label class="weekday-checkbox-wrapper" id="wrapper-wd-2">
+                      <input type="checkbox" name="weekdays" value="2" class="wd-checkbox">
+                      <span class="weekday-label-text">T4</span>
+                    </label>
+                    <label class="weekday-checkbox-wrapper" id="wrapper-wd-3">
+                      <input type="checkbox" name="weekdays" value="3" class="wd-checkbox">
+                      <span class="weekday-label-text">T5</span>
+                    </label>
+                    <label class="weekday-checkbox-wrapper" id="wrapper-wd-4">
+                      <input type="checkbox" name="weekdays" value="4" class="wd-checkbox">
+                      <span class="weekday-label-text">T6</span>
+                    </label>
+                    <label class="weekday-checkbox-wrapper" id="wrapper-wd-5">
+                      <input type="checkbox" name="weekdays" value="5" class="wd-checkbox">
+                      <span class="weekday-label-text">T7</span>
+                    </label>
+                    <label class="weekday-checkbox-wrapper" id="wrapper-wd-6">
+                      <input type="checkbox" name="weekdays" value="6" class="wd-checkbox">
+                      <span class="weekday-label-text">CN</span>
+                    </label>
+                  </div>
+                </div>
+
+                <div class="row mb-3">
+                  <div class="col-6">
+                    <label class="form-label fw-bold text-dark" for="startTimeInput">Giờ bắt đầu</label>
+                    <input type="time" id="startTimeInput" class="form-control" required>
+                  </div>
+                  <div class="col-6">
+                    <label class="form-label fw-bold text-dark" for="endTimeInput">Giờ kết thúc</label>
+                    <input type="time" id="endTimeInput" class="form-control" required>
+                  </div>
+                </div>
+
+                <div class="mb-4">
+                  <label class="form-label fw-bold text-dark" for="noteInput">Ghi chú cho PT</label>
+                  <textarea id="noteInput" class="form-control" rows="3" placeholder="Ghi chú thêm cho PT..."></textarea>
+                </div>
+
+                <button type="submit" class="btn btn-brand w-100 py-3" id="submitBtn">
+                  <i class="bi bi-calendar-check me-2"></i> Xác nhận đăng ký & đặt lịch
+                </button>
+              </form>
+            </div>
+          </div>
+
+          <!-- Preview Column -->
+          <div class="col-lg-6">
+            <div class="table-card p-4 bg-white h-100">
+              <h3 class="h5 fw-bold text-dark mb-4 border-bottom pb-2">
+                <i class="bi bi-eye text-brand me-2"></i> Xem trước lịch tập cá nhân
+              </h3>
+              
+              <div id="previewStatus" class="alert alert-secondary py-3 text-center mb-0">
+                <i class="bi bi-info-circle fs-4 d-block mb-2 text-muted"></i>
+                <span>Vui lòng hoàn thành các thông tin bên trái để xem trước danh sách ngày tập.</span>
+              </div>
+
+              <div id="previewConflictAlert" class="alert alert-danger py-3 mb-3 d-none">
+                <h5 class="fw-bold mb-2"><i class="bi bi-exclamation-triangle-fill"></i> Phát hiện trùng lịch tập!</h5>
+                <span id="conflictDetail">Có một số ngày huấn luyện viên hoặc bạn đã bị bận lịch. Vui lòng điều chỉnh giờ hoặc thứ tập.</span>
+              </div>
+
+              <div id="previewContainer" class="d-none mt-2 flex-grow-1" style="max-height: 520px; overflow-y: auto;">
+                <div class="table-responsive">
+                  <table class="table table-hover">
+                    <thead class="table-light">
+                      <tr>
+                        <th scope="col" style="width: 8%">STT</th>
+                        <th scope="col" style="width: 32%">Ngày</th>
+                        <th scope="col" style="width: 25%">Thứ</th>
+                        <th scope="col" style="width: 35%">Trạng thái</th>
+                      </tr>
+                    </thead>
+                    <tbody id="previewList">
+                      <!-- JS dynamically fills items here -->
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <footer class="footer py-5 bg-dark text-light mt-5">
+    <div class="container">
+      <div class="row g-4 text-start">
+        <div class="col-md-4">
+          <a class="navbar-brand fw-bold text-white fs-4 d-flex align-items-center gap-2 mb-3" href="index.html">
+            <img class="brand-logo" src="assets/images/logo.png" alt="" style="width: 32px; height: 32px; border-radius: 8px;">
+            Gym Booking
+          </a>
+          <p class="text-secondary small">Giải pháp quản lý phòng tập thông minh, đặt lịch huấn luyện viên 1-1 và quản lý gói tập tối ưu.</p>
+        </div>
+        <div class="col-md-4">
+          <h6 class="text-uppercase fw-bold text-white mb-3">Liên kết nhanh</h6>
+          <ul class="list-unstyled text-secondary small d-flex flex-column gap-2">
+            <li><a href="classes.html" class="text-secondary text-decoration-none">Lớp tập</a></li>
+            <li><a href="trainers.html" class="text-secondary text-decoration-none">Huấn luyện viên (HLV)</a></li>
+            <li><a href="packages.html" class="text-secondary text-decoration-none">Gói tập hội viên</a></li>
+            <li><a href="pt-packages.html" class="text-secondary text-decoration-none">Gói PT cá nhân</a></li>
+          </ul>
+        </div>
+        <div class="col-md-4">
+          <h6 class="text-uppercase fw-bold text-white mb-3">Liên hệ</h6>
+          <p class="text-secondary small mb-2"><i class="bi bi-geo-alt me-2 text-brand"></i> Tầng 5, Tòa nhà DEHA, Hà Nội</p>
+          <p class="text-secondary small mb-2"><i class="bi bi-telephone me-2 text-brand"></i> Hotline: 1900 6868</p>
+          <p class="text-secondary small"><i class="bi bi-envelope me-2 text-brand"></i> support@gymbooking.vn</p>
+        </div>
+      </div>
+      <hr class="border-secondary my-4">
+      <div class="d-flex flex-column flex-sm-row justify-content-between align-items-center gap-2">
+        <span class="text-secondary small">© 2026 Gym Booking. Tất cả quyền được bảo lưu.</span>
+        <div class="d-flex gap-3">
+          <a href="#" class="text-secondary fs-5"><i class="bi bi-facebook"></i></a>
+          <a href="#" class="text-secondary fs-5"><i class="bi bi-instagram"></i></a>
+          <a href="#" class="text-secondary fs-5"><i class="bi bi-youtube"></i></a>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="assets/js/api.js"></script>
+  <script src="assets/js/app.js"></script>
+</body>
+</html>

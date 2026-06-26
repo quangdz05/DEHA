@@ -189,3 +189,7 @@ SIMPLE_JWT = {
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
 
+# Email Settings for local development (print to console)
+EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+
+

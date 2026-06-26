@@ -25,7 +25,6 @@ FRONTEND_DIR = settings.BASE_DIR.parent / 'gym_booking_frontend'
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include('gym_booking_backend.presentation.urls')),
-    path('', include('gym_booking_backend.presentation.pt_urls')),
 ]
 
 if settings.DEBUG:

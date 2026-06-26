@@ -570,11 +570,14 @@ class TrainerScheduleListAPIView(BaseAPIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        if not hasattr(request.user, "profile") or request.user.profile.role != "trainer":
+        if not hasattr(request.user, "profile") or request.user.profile.role not in ["trainer", "admin"]:
             return self.handle_result(Result.failure_result("Permission denied.", status_code=403))
         from gym_booking_backend.infrastructure.models import Trainer, ClassSchedule
         trainer = Trainer.objects.filter(user=request.user).first()
         if not trainer:
+            if request.user.profile.role == "admin":
+                schedules = ClassSchedule.objects.select_related("gym_class", "trainer", "room").all()
+                return self.handle_result(Result.success_result(schedules), ClassScheduleSerializer, many=True)
             return self.handle_result(Result.failure_result("Trainer profile not linked to user.", status_code=404))
         schedules = ClassSchedule.objects.select_related("gym_class", "trainer", "room").filter(trainer=trainer)
         return self.handle_result(Result.success_result(schedules), ClassScheduleSerializer, many=True)
@@ -584,14 +587,18 @@ class TrainerScheduleBookingListAPIView(BaseAPIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, schedule_id):
-        if not hasattr(request.user, "profile") or request.user.profile.role != "trainer":
+        if not hasattr(request.user, "profile") or request.user.profile.role not in ["trainer", "admin"]:
             return self.handle_result(Result.failure_result("Permission denied.", status_code=403))
         from gym_booking_backend.infrastructure.models import Trainer, ClassSchedule, Booking
-        trainer = Trainer.objects.filter(user=request.user).first()
-        if not trainer:
-            return self.handle_result(Result.failure_result("Trainer profile not linked to user.", status_code=404))
-        
-        schedule = ClassSchedule.objects.filter(id=schedule_id, trainer=trainer).first()
+        is_admin = request.user.profile.role == "admin"
+        if not is_admin:
+            trainer = Trainer.objects.filter(user=request.user).first()
+            if not trainer:
+                return self.handle_result(Result.failure_result("Trainer profile not linked to user.", status_code=404))
+            schedule = ClassSchedule.objects.filter(id=schedule_id, trainer=trainer).first()
+        else:
+            schedule = ClassSchedule.objects.filter(id=schedule_id).first()
+
         if not schedule:
             return self.handle_result(Result.failure_result("Schedule not found or does not belong to you.", status_code=404))
             
@@ -652,15 +659,19 @@ class TrainerBookingAttendanceAPIView(BaseAPIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, booking_id):
-        if not hasattr(request.user, "profile") or request.user.profile.role != "trainer":
+        if not hasattr(request.user, "profile") or request.user.profile.role not in ["trainer", "admin"]:
             return self.handle_result(Result.failure_result("Permission denied.", status_code=403))
         
         from gym_booking_backend.infrastructure.models import Trainer, Booking
-        trainer = Trainer.objects.filter(user=request.user).first()
-        if not trainer:
-            return self.handle_result(Result.failure_result("Trainer profile not linked to user.", status_code=404))
-
-        booking = Booking.objects.filter(id=booking_id, schedule__trainer=trainer).first()
+        is_admin = request.user.profile.role == "admin"
+        if not is_admin:
+            trainer = Trainer.objects.filter(user=request.user).first()
+            if not trainer:
+                return self.handle_result(Result.failure_result("Trainer profile not linked to user.", status_code=404))
+            booking = Booking.objects.filter(id=booking_id, schedule__trainer=trainer).first()
+        else:
+            booking = Booking.objects.filter(id=booking_id).first()
+            
         if not booking:
             return self.handle_result(Result.failure_result("Booking not found or does not belong to your schedule.", status_code=404))
 
@@ -722,13 +733,17 @@ class TrainerReviewsListAPIView(BaseAPIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        if not hasattr(request.user, "profile") or request.user.profile.role != "trainer":
+        if not hasattr(request.user, "profile") or request.user.profile.role not in ["trainer", "admin"]:
             return self.handle_result(Result.failure_result("Permission denied.", status_code=403))
         from gym_booking_backend.infrastructure.models import Trainer, Review
-        trainer = Trainer.objects.filter(user=request.user).first()
-        if not trainer:
-            return self.handle_result(Result.failure_result("Trainer profile not linked to user.", status_code=404))
-        reviews = Review.objects.filter(trainer=trainer)
+        is_admin = request.user.profile.role == "admin"
+        if not is_admin:
+            trainer = Trainer.objects.filter(user=request.user).first()
+            if not trainer:
+                return self.handle_result(Result.failure_result("Trainer profile not linked to user.", status_code=404))
+            reviews = Review.objects.filter(trainer=trainer)
+        else:
+            reviews = Review.objects.all()
         from gym_booking_backend.presentation.serializers import ReviewSerializer
         return self.handle_result(Result.success_result(reviews), ReviewSerializer, many=True)
 

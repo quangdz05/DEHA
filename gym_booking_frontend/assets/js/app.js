@@ -458,9 +458,9 @@ async function bookSchedule(scheduleId) {
       body: JSON.stringify({ schedule: scheduleId, note: "Dat tu frontend rieng" }),
     });
     if (booking && booking.status === "waitlist") {
-      showAlert("Lop hoc a ay. Ban a uoc them vao danh sach cho thanh cong!", "warning");
+      showAlert("Lớp học đã đầy. Bạn đã được thêm vào danh sách chờ thành công!", "warning");
     } else {
-      showAlert("at lich thanh cong.");
+      showAlert("Đặt lịch thành công.");
     }
   } catch (error) {
     showAlert(error.message, "danger");
@@ -479,12 +479,12 @@ function getStatusLabel(status) {
       waitlist: "Waitlist",
     }
     : {
-      pending: "Cho xac nhan",
-      confirmed: "Da xac nhan",
-      cancelled: "Da huy",
-      completed: "Hoan thanh",
-      no_show: "Vang mat",
-      waitlist: "Danh sach cho",
+      pending: "Chờ xác nhận",
+      confirmed: "Đã xác nhận",
+      cancelled: "Đã hủy",
+      completed: "Hoàn thành",
+      no_show: "Vắng mặt",
+      waitlist: "Danh sách chờ",
     };
   return labels[status] || status;
 }
@@ -667,11 +667,16 @@ async function loadMyBookings() {
     const card2fa = document.getElementById("twoFactorSettingsCard");
     const status2fa = document.getElementById("twoFactorStatusSection");
     if (card2fa && status2fa) {
-      card2fa.classList.remove("d-none");
       try {
         const profile = await apiFetch("/profile/me/");
-        render2FASettings(profile);
+        if (profile.two_factor_enabled) {
+          card2fa.classList.add("d-none");
+        } else {
+          card2fa.classList.remove("d-none");
+          render2FASettings(profile);
+        }
       } catch (err) {
+        card2fa.classList.remove("d-none");
         status2fa.innerHTML = `<p class="text-danger">Không thể tải thông tin 2FA: ${err.message}</p>`;
       }
     }
@@ -874,9 +879,15 @@ async function disable2FA(event) {
 }
 
 async function reload2FASettings() {
+  const card2fa = document.getElementById("twoFactorSettingsCard");
   try {
     const profile = await apiFetch("/profile/me/");
-    render2FASettings(profile);
+    if (profile.two_factor_enabled) {
+      if (card2fa) card2fa.classList.add("d-none");
+    } else {
+      if (card2fa) card2fa.classList.remove("d-none");
+      render2FASettings(profile);
+    }
   } catch (err) {
     console.error("Lỗi khi tải cấu hình 2FA:", err);
   }
@@ -907,7 +918,7 @@ async function handleRegister(event) {
         role: form.role.value,
       }),
     });
-    showAlert("ang ky thanh cong. Ban co the ang nhap.", "success");
+    showAlert("Đăng ký thành công. Bạn có thể đăng nhập.", "success");
     setTimeout(() => location.href = "login.html", 900);
   } catch (error) {
     showAlert(error.message, "danger");
@@ -933,32 +944,32 @@ async function loadAdminBookings() {
             <strong>${b.schedule_name}</strong><br>
             <small class="text-muted">${dateStr}</small>
           </td>
-          <td><span class="status-badge status-${b.status}">${b.status}</span></td>
+          <td><span class="status-badge status-${b.status}">${getStatusLabel(b.status)}</span></td>
           <td>${b.note || "-"}</td>
           <td>
             <div class="btn-group gap-1">
-              ${b.status === "pending" ? `<button class="btn btn-sm btn-success" onclick="changeBookingStatus(${b.id}, 'confirmed')">Xac nhan</button>` : ""}
-              ${["pending", "confirmed"].includes(b.status) ? `<button class="btn btn-sm btn-outline-danger" onclick="changeBookingStatus(${b.id}, 'cancelled')">Hay</button>` : ""}
-              ${b.status === "confirmed" ? `<button class="btn btn-sm btn-primary" onclick="changeBookingStatus(${b.id}, 'completed')">Hoan thanh</button>` : ""}
-              ${b.status === "confirmed" ? `<button class="btn btn-sm btn-warning text-dark" onclick="changeBookingStatus(${b.id}, 'no_show')">Vang mat</button>` : ""}
+              ${b.status === "pending" ? `<button class="btn btn-sm btn-success" onclick="changeBookingStatus(${b.id}, 'confirmed')">Xác nhận</button>` : ""}
+              ${["pending", "confirmed"].includes(b.status) ? `<button class="btn btn-sm btn-outline-danger" onclick="changeBookingStatus(${b.id}, 'cancelled')">Hủy</button>` : ""}
+              ${b.status === "confirmed" ? `<button class="btn btn-sm btn-primary" onclick="changeBookingStatus(${b.id}, 'completed')">Hoàn thành</button>` : ""}
+              ${b.status === "confirmed" ? `<button class="btn btn-sm btn-warning text-dark" onclick="changeBookingStatus(${b.id}, 'no_show')">Vắng mặt</button>` : ""}
             </div>
           </td>
         </tr>
       `;
-    }).join("") : `<tr><td colspan="6" class="text-center text-muted">Khong co du lieu at lich.</td></tr>`;
+    }).join("") : `<tr><td colspan="6" class="text-center text-muted">Không có dữ liệu đặt lịch.</td></tr>`;
   } catch (err) {
-    showAlert("Khong the tai danh sach at lich: " + err.message, "danger");
+    showAlert("Không thể tải danh sách đặt lịch: " + err.message, "danger");
   }
 }
 
 async function changeBookingStatus(bookingId, status) {
-  if (!confirm(`Ban muon oi trang thai at lich nay thanh "${status}"?`)) return;
+  if (!confirm(`Bạn muốn đổi trạng thái đặt lịch này thành "${getStatusLabel(status)}"?`)) return;
   try {
     await apiFetch(`/admin/bookings/${bookingId}/status/`, {
       method: "POST",
       body: JSON.stringify({ status })
     });
-    showAlert("Cap nhat trang thai thanh cong!");
+    showAlert("Cập nhật trạng thái thành công!");
     loadAdminBookings();
   } catch (err) {
     showAlert(err.message, "danger");
@@ -975,23 +986,23 @@ async function loadAdminTrainerStudents() {
         <td><strong class="text-brand">${b.booking_code}</strong></td>
         <td>
           <strong>${b.full_name || b.user_username}</strong><br>
-          <small class="text-muted">${b.phone || "Chua cap nhat SDT"}</small>
+          <small class="text-muted">${b.phone || "Chưa cập nhật SĐT"}</small>
         </td>
         <td>${b.trainer_name}</td>
         <td>${new Date(b.start_date).toLocaleDateString("vi-VN")} - ${new Date(b.end_date).toLocaleDateString("vi-VN")}</td>
-        <td>${b.sessions_per_week} buoi/tuan trong ${b.months} thang</td>
+        <td>${b.sessions_per_week} buổi/tuần trong ${b.months} tháng</td>
         <td><span class="status-badge status-${b.status}">${getStatusLabel(b.status)}</span></td>
         <td>
           <div class="btn-group gap-1">
-            ${b.status === "pending" ? `<button class="btn btn-sm btn-success" onclick="updateAdminTrainerMonthlyStatus(${b.id}, 'confirmed')">Xac nhan</button>` : ""}
-            ${["pending", "confirmed"].includes(b.status) ? `<button class="btn btn-sm btn-outline-danger" onclick="updateAdminTrainerMonthlyStatus(${b.id}, 'cancelled')">Huy</button>` : ""}
-            ${b.status === "confirmed" ? `<button class="btn btn-sm btn-primary" onclick="updateAdminTrainerMonthlyStatus(${b.id}, 'completed')">Hoan thanh</button>` : ""}
+            ${b.status === "pending" ? `<button class="btn btn-sm btn-success" onclick="updateAdminTrainerMonthlyStatus(${b.id}, 'confirmed')">Xác nhận</button>` : ""}
+            ${["pending", "confirmed"].includes(b.status) ? `<button class="btn btn-sm btn-outline-danger" onclick="updateAdminTrainerMonthlyStatus(${b.id}, 'cancelled')">Hủy</button>` : ""}
+            ${b.status === "confirmed" ? `<button class="btn btn-sm btn-primary" onclick="updateAdminTrainerMonthlyStatus(${b.id}, 'completed')">Hoàn thành</button>` : ""}
           </div>
         </td>
       </tr>
-    `).join("") : `<tr><td colspan="7" class="text-center text-muted">Chua co hoc vien dang ky HLV theo thang.</td></tr>`;
+    `).join("") : `<tr><td colspan="7" class="text-center text-muted">Chưa có học viên đăng ký HLV theo tháng.</td></tr>`;
   } catch (err) {
-    showAlert("Khong the tai danh sach hoc vien HLV: " + err.message, "danger");
+    showAlert("Không thể tải danh sách học viên HLV: " + err.message, "danger");
   }
 }
 
@@ -1001,7 +1012,7 @@ async function updateAdminTrainerMonthlyStatus(bookingId, status) {
       method: "POST",
       body: JSON.stringify({ status }),
     });
-    showAlert("Cap nhat dang ky HLV theo thang thanh cong.");
+    showAlert("Cập nhật đăng ký HLV theo tháng thành công.");
     loadAdminTrainerStudents();
   } catch (err) {
     showAlert(err.message, "danger");
@@ -1015,33 +1026,34 @@ async function loadAdminPayments() {
     const payments = await apiFetch("/admin/payments/");
     container.innerHTML = payments.length ? payments.map((p) => {
       const dateStr = new Date(p.created_at).toLocaleString("vi-VN");
+      const payStatusLabel = p.status === 'pending' ? 'Chờ duyệt' : p.status === 'success' ? 'Thành công' : p.status === 'failed' ? 'Thất bại' : p.status;
       return `
         <tr>
           <td><code class="text-dark font-monospace">${p.transaction_code || "#" + p.id}</code></td>
           <td>${p.payment_title || p.package_name || "-"}</td>
           <td><strong class="text-danger">${money(p.amount)}</strong></td>
           <td><span class="badge bg-secondary text-uppercase">${p.payment_method}</span></td>
-          <td><span class="status-badge status-${p.status}">${p.status}</span></td>
+          <td><span class="status-badge status-${p.status}">${payStatusLabel}</span></td>
           <td><small class="text-muted">${dateStr}</small></td>
           <td>
-            ${p.status === "pending" ? `<button class="btn btn-sm btn-brand" onclick="confirmAdminPayment(${p.id})">Duyet thanh toan</button>` : `<span class="text-success"><i class="bi bi-check-circle"></i> a duyet</span>`}
+            ${p.status === "pending" ? `<button class="btn btn-sm btn-brand" onclick="confirmAdminPayment(${p.id})">Duyệt thanh toán</button>` : `<span class="text-success"><i class="bi bi-check-circle"></i> Đã duyệt</span>`}
           </td>
         </tr>
       `;
-    }).join("") : `<tr><td colspan="7" class="text-center text-muted">Khong co du lieu thanh toan.</td></tr>`;
+    }).join("") : `<tr><td colspan="7" class="text-center text-muted">Không có dữ liệu thanh toán.</td></tr>`;
   } catch (err) {
-    showAlert("Khong the tai danh sach thanh toan: " + err.message, "danger");
+    showAlert("Không thể tải danh sách thanh toán: " + err.message, "danger");
   }
 }
 
 async function confirmAdminPayment(paymentId) {
-  if (!confirm("Xac nhan a nhan tien va kich hoat goi tap nay?")) return;
+  if (!confirm("Xác nhận đã nhận tiền và kích hoạt gói tập này?")) return;
   try {
     await apiFetch(`/admin/payments/${paymentId}/confirm/`, {
       method: "POST",
       body: "{}"
     });
-    showAlert("Duyet thanh toan thanh cong!");
+    showAlert("Duyệt thanh toán thành công!");
     loadAdminPayments();
   } catch (err) {
     showAlert(err.message, "danger");
@@ -1065,15 +1077,15 @@ async function loadTrainerSchedules() {
           <td>${s.room_name}</td>
           <td>${dateStr}</td>
           <td>${s.current_participants}/${s.max_participants}</td>
-          <td><span class="status-badge status-${s.status}">${s.status}</span></td>
+          <td><span class="status-badge status-${s.status}">${getStatusLabel(s.status)}</span></td>
           <td>
-            <button class="btn btn-sm btn-outline-brand" onclick="loadScheduleParticipants(${s.id}, '${s.gym_class_name}', '${dateStr}')">Xem danh sach</button>
+            <button class="btn btn-sm btn-outline-brand" onclick="loadScheduleParticipants(${s.id}, '${s.gym_class_name}', '${dateStr}')">Xem danh sách</button>
           </td>
         </tr>
       `;
-    }).join("") : `<tr><td colspan="6" class="text-center text-muted">Khong co lich giang day nao uoc phan cong.</td></tr>`;
+    }).join("") : `<tr><td colspan="6" class="text-center text-muted">Không có lịch giảng dạy nào được phân công.</td></tr>`;
   } catch (err) {
-    showAlert("Khong the tai lich giang day: " + err.message, "danger");
+    showAlert("Không thể tải lịch giảng dạy: " + err.message, "danger");
   }
 }
 
@@ -1086,7 +1098,7 @@ async function loadTrainerPersonalBookings() {
       <tr>
         <td>
           <strong>${b.full_name || b.user_username}</strong><br>
-          <small class="text-muted">${b.phone || "Chua cap nhat SDT"}</small>
+          <small class="text-muted">${b.phone || "Chưa cập nhật SĐT"}</small>
         </td>
         <td>${new Date(b.start_time).toLocaleString("vi-VN")}</td>
         <td>${new Date(b.end_time).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}</td>
@@ -1094,12 +1106,12 @@ async function loadTrainerPersonalBookings() {
         <td>${b.note || ""}</td>
         <td>
           <div class="btn-group gap-1">
-            <button class="btn btn-sm btn-success px-2 py-0" onclick="updateTrainerPersonalBookingStatus(${b.id}, 'completed')">Hoan thanh</button>
-            <button class="btn btn-sm btn-outline-danger px-2 py-0" onclick="updateTrainerPersonalBookingStatus(${b.id}, 'no_show')">Vang</button>
+            <button class="btn btn-sm btn-success px-2 py-0" onclick="updateTrainerPersonalBookingStatus(${b.id}, 'completed')">Hoàn thành</button>
+            <button class="btn btn-sm btn-outline-danger px-2 py-0" onclick="updateTrainerPersonalBookingStatus(${b.id}, 'no_show')">Vắng</button>
           </div>
         </td>
       </tr>
-    `).join("") : `<tr><td colspan="6" class="text-center text-muted">Chua co lich 1-1 nao.</td></tr>`;
+    `).join("") : `<tr><td colspan="6" class="text-center text-muted">Chưa có lịch 1-1 nào.</td></tr>`;
   } catch (err) {
     container.innerHTML = `<tr><td colspan="6" class="text-center text-danger">${err.message}</td></tr>`;
   }
@@ -1111,7 +1123,7 @@ async function updateTrainerPersonalBookingStatus(bookingId, status) {
       method: "POST",
       body: JSON.stringify({ status }),
     });
-    showAlert("Cap nhat lich 1-1 thanh cong.");
+    showAlert("Cập nhật lịch 1-1 thành công.");
     loadTrainerPersonalBookings();
   } catch (err) {
     showAlert(err.message, "danger");
@@ -1127,22 +1139,22 @@ async function loadTrainerMonthlyStudents() {
       <tr>
         <td>
           <strong>${b.full_name || b.user_username}</strong><br>
-          <small class="text-muted">${b.phone || "Chua cap nhat SDT"}</small>
-          ${b.fitness_goals ? `<div class="small text-secondary">Muc tieu: ${b.fitness_goals}</div>` : ""}
+          <small class="text-muted">${b.phone || "Chưa cập nhật SĐT"}</small>
+          ${b.fitness_goals ? `<div class="small text-secondary">Mục tiêu: ${b.fitness_goals}</div>` : ""}
         </td>
         <td>${new Date(b.start_date).toLocaleDateString("vi-VN")} - ${new Date(b.end_date).toLocaleDateString("vi-VN")}</td>
-        <td>${b.sessions_per_week} buoi/tuan, ${b.months} thang</td>
+        <td>${b.sessions_per_week} buổi/tuần, ${b.months} tháng</td>
         <td>${b.preferred_time || "-"}</td>
         <td><span class="status-badge status-${b.status}">${getStatusLabel(b.status)}</span></td>
         <td>
           <div class="btn-group gap-1">
-            ${b.status === "pending" ? `<button class="btn btn-sm btn-success px-2 py-0" onclick="updateTrainerMonthlyStatus(${b.id}, 'confirmed')">Xac nhan</button>` : ""}
-            ${["pending", "confirmed"].includes(b.status) ? `<button class="btn btn-sm btn-outline-danger px-2 py-0" onclick="updateTrainerMonthlyStatus(${b.id}, 'cancelled')">Huy</button>` : ""}
-            ${b.status === "confirmed" ? `<button class="btn btn-sm btn-primary px-2 py-0" onclick="updateTrainerMonthlyStatus(${b.id}, 'completed')">Hoan thanh</button>` : ""}
+            ${b.status === "pending" ? `<button class="btn btn-sm btn-success px-2 py-0" onclick="updateTrainerMonthlyStatus(${b.id}, 'confirmed')">Xác nhận</button>` : ""}
+            ${["pending", "confirmed"].includes(b.status) ? `<button class="btn btn-sm btn-outline-danger px-2 py-0" onclick="updateTrainerMonthlyStatus(${b.id}, 'cancelled')">Hủy</button>` : ""}
+            ${b.status === "confirmed" ? `<button class="btn btn-sm btn-primary px-2 py-0" onclick="updateTrainerMonthlyStatus(${b.id}, 'completed')">Hoàn thành</button>` : ""}
           </div>
         </td>
       </tr>
-    `).join("") : `<tr><td colspan="6" class="text-center text-muted">Chua co hoc vien dang ky theo thang.</td></tr>`;
+    `).join("") : `<tr><td colspan="6" class="text-center text-muted">Chưa có học viên đăng ký theo tháng.</td></tr>`;
   } catch (err) {
     container.innerHTML = `<tr><td colspan="6" class="text-center text-danger">${err.message}</td></tr>`;
   }
@@ -1154,7 +1166,7 @@ async function updateTrainerMonthlyStatus(bookingId, status) {
       method: "POST",
       body: JSON.stringify({ status }),
     });
-    showAlert("Cap nhat hoc vien theo thang thanh cong.");
+    showAlert("Cập nhật học viên theo tháng thành công.");
     loadTrainerMonthlyStudents();
   } catch (err) {
     showAlert(err.message, "danger");
@@ -1165,7 +1177,7 @@ async function loadScheduleParticipants(scheduleId, className, dateTimeStr) {
   const modalTitle = document.querySelector("#participantModalLabel");
   const container = document.querySelector("#participantRows");
 
-  if (modalTitle) modalTitle.textContent = `Danh sach hoc vien - ${className} (${dateTimeStr})`;
+  if (modalTitle) modalTitle.textContent = `Danh sách học viên - ${className} (${dateTimeStr})`;
   if (!container) return;
 
   // Store these for reloading roster later
@@ -1173,7 +1185,7 @@ async function loadScheduleParticipants(scheduleId, className, dateTimeStr) {
   window.currentRosterClassName = className;
   window.currentRosterDateTime = dateTimeStr;
 
-  container.innerHTML = `<tr><td colspan="5" class="text-center"><div class="spinner-border spinner-border-sm text-brand"></div> ang tai...</td></tr>`;
+  container.innerHTML = `<tr><td colspan="5" class="text-center"><div class="spinner-border spinner-border-sm text-brand"></div> Đang tải...</td></tr>`;
 
   // Show modal using Bootstrap if exists
   const modalEl = document.getElementById("participantModal");
@@ -1195,28 +1207,28 @@ async function loadScheduleParticipants(scheduleId, className, dateTimeStr) {
           <strong>${p.full_name}</strong> <span class="text-muted">(@${p.username})</span>
           ${p.health_notes || p.fitness_goals ? `
             <div class="mt-1 small">
-              ${p.health_notes ? `<span class="badge bg-danger me-1">Suc khoe: ${p.health_notes}</span>` : ''}
-              ${p.fitness_goals ? `<span class="badge bg-primary">Muc tieu: ${p.fitness_goals}</span>` : ''}
+              ${p.health_notes ? `<span class="badge bg-danger me-1">Sức khỏe: ${p.health_notes}</span>` : ''}
+              ${p.fitness_goals ? `<span class="badge bg-primary">Mục tiêu: ${p.fitness_goals}</span>` : ''}
             </div>
           ` : ''}
           ${p.emergency_contact_name || p.emergency_contact_phone ? `
             <div class="mt-1 small text-secondary">
-              Lien he khan cap: ${p.emergency_contact_name || '-'} (${p.emergency_contact_phone || '-'})
+              Liên hệ khẩn cấp: ${p.emergency_contact_name || '-'} (${p.emergency_contact_phone || '-'})
             </div>
           ` : ''}
         </td>
-        <td>${p.phone || '<i class="text-muted">Chua cap nhat</i>'}</td>
+        <td>${p.phone || '<i class="text-muted">Chưa cập nhật</i>'}</td>
         <td><span class="status-badge status-${p.status}">${getStatusLabel(p.status)}</span></td>
         <td>
           <div class="btn-group gap-1">
-            <button class="btn btn-sm btn-success px-2 py-0" onclick="markAttendance(${p.id}, 'completed')">Co mat</button>
-            <button class="btn btn-sm btn-outline-danger px-2 py-0" onclick="markAttendance(${p.id}, 'no_show')">Vang mat</button>
+            <button class="btn btn-sm btn-success px-2 py-0" onclick="markAttendance(${p.id}, 'completed')">Có mặt</button>
+            <button class="btn btn-sm btn-outline-danger px-2 py-0" onclick="markAttendance(${p.id}, 'no_show')">Vắng mặt</button>
           </div>
         </td>
       </tr>
-    `).join("") : `<tr><td colspan="5" class="text-center text-muted">Chua co hoc vien nao at lich nay.</td></tr>`;
+    `).join("") : `<tr><td colspan="5" class="text-center text-muted">Chưa có học viên nào đặt lịch này.</td></tr>`;
   } catch (err) {
-    container.innerHTML = `<tr><td colspan="5" class="text-center">Lai: ${err.message}</td></tr>`;
+    container.innerHTML = `<tr><td colspan="5" class="text-center">Lỗi: ${err.message}</td></tr>`;
   }
 }
 
@@ -1226,12 +1238,12 @@ async function markAttendance(bookingId, status) {
       method: "POST",
       body: JSON.stringify({ status }),
     });
-    showAlert("iem danh hoc vien thanh cong!");
+    showAlert("Điểm danh học viên thành công!");
     if (window.currentRosterScheduleId) {
       loadScheduleParticipants(window.currentRosterScheduleId, window.currentRosterClassName, window.currentRosterDateTime);
     }
   } catch (err) {
-    showAlert("Loi iem danh: " + err.message, "danger");
+    showAlert("Lỗi điểm danh: " + err.message, "danger");
   }
 }
 
@@ -1241,23 +1253,23 @@ async function loadTrainerReviews() {
   try {
     const reviews = await apiFetch("/trainer/reviews/");
     if (!reviews || !reviews.length) {
-      container.innerHTML = `<p class="text-muted">Chua co anh gia nao tu hoc vien.</p>`;
+      container.innerHTML = `<p class="text-muted">Chưa có đánh giá nào từ học viên.</p>`;
       return;
     }
     container.innerHTML = reviews.map(r => `
       <div class="col-md-6">
         <div class="border rounded p-3 bg-white h-100 shadow-sm">
           <div class="d-flex justify-content-between mb-2">
-            <strong class="text-dark">Hoc vien: @${r.user_username}</strong>
+            <strong class="text-dark">Học viên: @${r.user_username}</strong>
             <span class="text-warning">${"".repeat(r.rating)}${"".repeat(5 - r.rating)}</span>
           </div>
-          <p class="mb-1 text-secondary">${r.comment || '<span class="text-muted italic">Khong co nhan xet</span>'}</p>
+          <p class="mb-1 text-secondary">${r.comment || '<span class="text-muted italic">Không có nhận xét</span>'}</p>
           <small class="text-muted">${new Date(r.created_at).toLocaleDateString("vi-VN")}</small>
         </div>
       </div>
     `).join("");
   } catch (err) {
-    container.innerHTML = `<p class="text-danger">Loi tai anh gia: ${err.message}</p>`;
+    container.innerHTML = `<p class="text-danger">Lỗi tải đánh giá: ${err.message}</p>`;
   }
 }
 
@@ -1362,10 +1374,11 @@ async function showTrainerDetail(trainerId) {
 
     modal.show();
 
-    // Fetch trainer details and reviews
-    const [trainer, reviews] = await Promise.all([
+    // Fetch trainer details, reviews, and schedules
+    const [trainer, reviews, schedules] = await Promise.all([
       apiFetch(`/trainers/${trainerId}/`),
-      apiFetch(`/trainers/${trainerId}/reviews/`).catch(() => [])
+      apiFetch(`/trainers/${trainerId}/reviews/`).catch(() => []),
+      apiFetch(`/schedules/?trainer=${trainerId}`).catch(() => [])
     ]);
 
     const avatar = trainer.image
@@ -1443,8 +1456,44 @@ async function showTrainerDetail(trainerId) {
             </div>
             
             <h5 class="fw-bold mb-2 text-dark"><i class="bi bi-chat-left-heart-fill text-brand me-2"></i>Đánh giá từ học viên</h5>
-            <div class="trainer-reviews-container overflow-y-auto px-1" style="max-height: 180px;">
+            <div class="trainer-reviews-container overflow-y-auto px-1 mb-3" style="max-height: 120px;">
               ${reviewsHtml}
+            </div>
+
+            <h5 class="fw-bold mb-2 text-dark"><i class="bi bi-calendar3 text-brand me-2"></i>Lịch dạy lớp tập</h5>
+            <div class="table-responsive border rounded mb-2" style="max-height: 150px; overflow-y: auto;">
+              <table class="table table-hover table-sm align-middle mb-0" style="font-size: 0.8rem;">
+                <thead class="table-light sticky-top">
+                  <tr>
+                    <th>Lớp</th>
+                    <th>Phòng</th>
+                    <th>Thời gian</th>
+                    <th>Chỗ</th>
+                    <th>Hành động</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${schedules && schedules.length ? schedules.map(s => {
+                    let actionBtn = "";
+                    if (s.status === "open" && s.available_slots > 0) {
+                      actionBtn = `<button class="btn btn-sm btn-brand py-0 px-2" style="font-size: 0.75rem;" onclick="bookScheduleFromDetail(${s.id}, ${trainerId})">Đặt</button>`;
+                    } else if (s.status === "full" || (s.status === "open" && s.available_slots <= 0)) {
+                      actionBtn = `<button class="btn btn-sm btn-warning text-dark fw-bold py-0 px-2" style="font-size: 0.75rem;" onclick="bookScheduleFromDetail(${s.id}, ${trainerId})">Chờ</button>`;
+                    } else {
+                      actionBtn = `<button class="btn btn-sm btn-secondary py-0 px-2" style="font-size: 0.75rem;" disabled>Hủy</button>`;
+                    }
+                    return `
+                      <tr>
+                        <td><strong>${s.gym_class_name}</strong></td>
+                        <td>${s.room_name}</td>
+                        <td>${formatDateTime(s.start_time)}</td>
+                        <td>${s.available_slots}/${s.max_participants}</td>
+                        <td>${actionBtn}</td>
+                      </tr>
+                    `;
+                  }).join("") : `<tr><td colspan="5" class="text-center text-muted small py-2">Chưa có lịch dạy lớp tập nào.</td></tr>`}
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
@@ -1464,6 +1513,35 @@ async function showTrainerDetail(trainerId) {
     }
   } catch (err) {
     showAlert("Không thể tải thông tin chi tiết HLV: " + err.message, "danger");
+  }
+}
+
+async function bookScheduleFromDetail(scheduleId, trainerId) {
+  if (!localStorage.getItem("gymUser")) {
+    const modalEl = document.getElementById("trainerDetailModal");
+    if (modalEl) {
+      const modalInstance = bootstrap.Modal.getInstance(modalEl);
+      if (modalInstance) modalInstance.hide();
+    }
+    setTimeout(() => {
+      location.href = "login.html";
+    }, 350);
+    return;
+  }
+  try {
+    const booking = await apiFetch("/bookings/", {
+      method: "POST",
+      body: JSON.stringify({ schedule: scheduleId, note: "Đặt lịch từ chi tiết HLV" }),
+    });
+    if (booking && booking.status === "waitlist") {
+      showAlert("Lớp học đã đầy. Bạn đã được thêm vào danh sách chờ thành công!", "warning");
+    } else {
+      showAlert("Đặt lịch thành công.");
+    }
+    // Refresh modal
+    await showTrainerDetail(trainerId);
+  } catch (error) {
+    showAlert(error.message, "danger");
   }
 }
 
@@ -2829,4 +2907,633 @@ async function submitCreatePackage(event) {
     mountChatbot();
   }
 })();
+
+// =========================================================================
+// PT Packages and Monthly Booking Logic
+// =========================================================================
+
+async function initPtPackagesPage() {
+  const alertContainer = document.getElementById("alertContainer");
+  const ptPackagesList = document.getElementById("ptPackagesList");
+  const bookingSection = document.getElementById("bookingSection");
+
+  const user = getStoredUser();
+
+  // 1. Show alerts about login & membership status
+  if (!user) {
+    if (alertContainer) {
+      alertContainer.innerHTML = `
+        <div class="alert alert-info text-center mb-5" role="alert">
+          Bạn chưa đăng nhập. Vui lòng <a href="login.html" class="alert-link">Đăng nhập</a> để xem chi tiết và đăng ký gói PT.
+        </div>
+      `;
+    }
+  }
+
+  try {
+    // Fetch packages
+    const data = await apiFetch("/pt-packages/");
+    const { packages, has_active_membership, has_active_pt_package } = data;
+
+    // Show warnings if user is authenticated but not eligible
+    if (user) {
+      if (!has_active_membership) {
+        if (alertContainer) {
+          alertContainer.innerHTML = `
+            <div class="alert alert-warning text-center mb-5" role="alert">
+              <i class="bi bi-exclamation-triangle-fill me-2"></i>
+              Bạn cần mua thẻ hội viên (Membership Package) trước khi đăng ký gói tập cá nhân PT. 
+              <a href="packages.html" class="alert-link">Mua thẻ hội viên ngay</a>
+            </div>
+          `;
+        }
+      } else if (has_active_pt_package) {
+        if (alertContainer) {
+          alertContainer.innerHTML = `
+            <div class="alert alert-warning text-center mb-5" role="alert">
+              <i class="bi bi-exclamation-triangle-fill me-2"></i>
+              Bạn hiện đang có một gói tập PT đang hoạt động. Vui lòng hoàn thành gói tập hiện tại trước khi đăng ký gói mới.
+              <a href="my-pt-packages.html" class="alert-link">Xem gói tập của tôi</a>
+            </div>
+          `;
+        }
+      }
+    }
+
+    // Render packages
+    if (ptPackagesList) {
+      if (!packages.length) {
+        ptPackagesList.innerHTML = `
+          <div class="col-12 text-center py-5">
+            <div class="empty-state">
+              <i class="bi bi-box-seam fs-1 text-muted d-block mb-3"></i>
+              <strong>Chưa có gói PT nào được kích hoạt.</strong>
+              <span>Vui lòng quay lại sau!</span>
+            </div>
+          </div>
+        `;
+      } else {
+        ptPackagesList.innerHTML = packages.map(pkg => {
+          let btnHtml = "";
+          if (!user) {
+            btnHtml = `<a href="login.html" class="btn btn-brand w-100 py-3">Đăng nhập để đăng ký</a>`;
+          } else if (has_active_pt_package) {
+            btnHtml = `<button class="btn btn-secondary w-100 py-3" disabled>Đã có gói PT đang hoạt động</button>`;
+          } else if (!has_active_membership) {
+            btnHtml = `<button class="btn btn-secondary w-100 py-3" disabled>Yêu cầu thẻ hội viên</button>`;
+          } else {
+            btnHtml = `<button class="btn btn-brand w-100 py-3" onclick="selectPtPackageForBooking(${pkg.id})">Đăng ký đặt lịch ngay</button>`;
+          }
+
+          return `
+            <div class="col-md-6 col-lg-4">
+              <div class="card card-ui border-0 shadow-sm h-100">
+                <div class="card-body p-4 d-flex flex-column">
+                  <div class="tag mb-3 bg-brand-light text-brand" style="display: inline-block; width: fit-content; padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: 700;">
+                    <i class="bi bi-gem"></i> Gói tập cá nhân
+                  </div>
+                  <h3 class="card-title fw-bold text-dark mb-3">${pkg.name}</h3>
+                  
+                  <div class="price mb-4">
+                    <span class="fs-1 fw-extrabold text-brand">${money(pkg.price)}</span>
+                    <span class="fs-6 text-muted">VNĐ</span>
+                  </div>
+
+                  <p class="card-text text-muted flex-grow-1">${pkg.description || "Gói tập cá nhân 1-1 với huấn luyện viên."}</p>
+
+                  <ul class="list-unstyled my-4 py-3 border-top border-bottom border-light">
+                    <li class="mb-3 d-flex align-items-center">
+                      <i class="bi bi-check-circle-fill text-success me-3 fs-5"></i>
+                      <span>Tổng số buổi: <strong>${pkg.total_sessions} buổi</strong></span>
+                    </li>
+                    <li class="mb-3 d-flex align-items-center">
+                      <i class="bi bi-check-circle-fill text-success me-3 fs-5"></i>
+                      <span>Thời hạn: <strong>${pkg.duration_days} ngày</strong></span>
+                    </li>
+                    <li class="mb-0 d-flex align-items-center">
+                      <i class="bi bi-check-circle-fill text-success me-3 fs-5"></i>
+                      <span>Tự động tạo lịch tập theo tháng cố định</span>
+                    </li>
+                  </ul>
+
+                  <div class="mt-auto">
+                    ${btnHtml}
+                  </div>
+                </div>
+              </div>
+            </div>
+          `;
+        }).join("");
+      }
+    }
+
+    // If eligible, load booking form dropdown options
+    if (user && has_active_membership && !has_active_pt_package) {
+      if (bookingSection) bookingSection.classList.remove("d-none");
+
+      // Populate packages select
+      const packageSelect = document.getElementById("packageSelect");
+      if (packageSelect) {
+        packageSelect.innerHTML = '<option value="">-- Chọn gói PT --</option>' + 
+          packages.map(pkg => `<option value="${pkg.id}">${pkg.name} (${pkg.total_sessions} buổi / ${pkg.duration_days} ngày)</option>`).join("");
+      }
+
+      // Fetch and populate trainers
+      const trainers = await apiFetch("/trainers/");
+      const trainerSelect = document.getElementById("trainerSelect");
+      if (trainerSelect) {
+        // Filter active trainers
+        const activeTrainers = trainers.filter(t => t.status === "active");
+        trainerSelect.innerHTML = '<option value="">-- Chọn Huấn luyện viên --</option>' + 
+          activeTrainers.map(t => `<option value="${t.id}">${t.name} (${t.specialty})</option>`).join("");
+      }
+
+      // Set min start date to today
+      const startDateInput = document.getElementById("startDateInput");
+      if (startDateInput) {
+        const today = new Date().toISOString().split("T")[0];
+        startDateInput.setAttribute("min", today);
+      }
+
+      // Check url for pre-selected package
+      const urlParams = new URLSearchParams(window.location.search);
+      const pkgId = urlParams.get("package");
+      if (pkgId && packageSelect) {
+        packageSelect.value = pkgId;
+        selectPtPackageForBooking(pkgId);
+      }
+
+      // Attach event listeners for real-time preview
+      setupPtBookingFormListeners();
+    }
+  } catch (error) {
+    console.error("Error loading PT packages page:", error);
+    if (ptPackagesList) {
+      ptPackagesList.innerHTML = `<div class="col-12 text-center py-5 text-danger">Có lỗi xảy ra khi tải danh sách gói PT: ${error.message}</div>`;
+    }
+  }
+}
+
+function selectPtPackageForBooking(packageId) {
+  const packageSelect = document.getElementById("packageSelect");
+  const bookingSection = document.getElementById("bookingSection");
+  
+  if (packageSelect) {
+    packageSelect.value = packageId;
+  }
+  
+  if (bookingSection) {
+    bookingSection.classList.remove("d-none");
+    bookingSection.scrollIntoView({ behavior: "smooth" });
+  }
+
+  // Trigger preview
+  triggerPtBookingPreview();
+}
+
+function setupPtBookingFormListeners() {
+  const packageSelect = document.getElementById("packageSelect");
+  const trainerSelect = document.getElementById("trainerSelect");
+  const startDateInput = document.getElementById("startDateInput");
+  const startTimeInput = document.getElementById("startTimeInput");
+  const endTimeInput = document.getElementById("endTimeInput");
+  const checkboxes = document.querySelectorAll(".wd-checkbox");
+
+  const elements = [packageSelect, trainerSelect, startDateInput, startTimeInput, endTimeInput];
+  elements.forEach(el => {
+    if (el) el.addEventListener("change", triggerPtBookingPreview);
+  });
+
+  checkboxes.forEach(cb => {
+    const wrapper = document.getElementById(`wrapper-wd-${cb.value}`);
+    cb.addEventListener("change", function () {
+      if (wrapper) wrapper.classList.toggle("active", cb.checked);
+      triggerPtBookingPreview();
+    });
+  });
+}
+
+async function triggerPtBookingPreview() {
+  const packageSelect = document.getElementById("packageSelect");
+  const trainerSelect = document.getElementById("trainerSelect");
+  const startDateInput = document.getElementById("startDateInput");
+  const startTimeInput = document.getElementById("startTimeInput");
+  const endTimeInput = document.getElementById("endTimeInput");
+  const checkboxes = document.querySelectorAll(".wd-checkbox");
+
+  const previewStatus = document.getElementById("previewStatus");
+  const previewContainer = document.getElementById("previewContainer");
+  const previewList = document.getElementById("previewList");
+  const previewConflictAlert = document.getElementById("previewConflictAlert");
+  const submitBtn = document.getElementById("submitBtn");
+
+  if (!packageSelect || !trainerSelect || !startDateInput || !startTimeInput || !endTimeInput || !submitBtn) return;
+
+  const packageId = packageSelect.value;
+  const trainerId = trainerSelect.value;
+  const startDate = startDateInput.value;
+  const startTime = startTimeInput.value;
+  const endTime = endTimeInput.value;
+  const selectedWeekdays = Array.from(checkboxes)
+    .filter(cb => cb.checked)
+    .map(cb => cb.value)
+    .join(",");
+
+  // Reset state if inputs are missing
+  if (!packageId || !trainerId || !startDate || !startTime || !endTime || !selectedWeekdays) {
+    if (previewStatus) {
+      previewStatus.classList.remove("d-none");
+      previewStatus.className = "alert alert-secondary py-3 text-center mb-0";
+      previewStatus.innerHTML = `
+        <i class="bi bi-info-circle fs-4 d-block mb-2 text-muted"></i>
+        <span>Vui lòng hoàn thành các thông tin bên trái để xem trước danh sách ngày tập.</span>
+      `;
+    }
+    if (previewContainer) previewContainer.classList.add("d-none");
+    if (previewConflictAlert) previewConflictAlert.classList.add("d-none");
+    submitBtn.disabled = false;
+    return;
+  }
+
+  // Show loading spinner
+  if (previewStatus) {
+    previewStatus.classList.remove("d-none");
+    previewStatus.className = "alert alert-info py-3 text-center mb-0";
+    previewStatus.innerHTML = `
+      <div class="spinner-border text-brand mb-2 d-block mx-auto" role="status"></div>
+      <span>Đang tải danh sách lịch và kiểm tra trùng lặp...</span>
+    `;
+  }
+  if (previewContainer) previewContainer.classList.add("d-none");
+  if (previewConflictAlert) previewConflictAlert.classList.add("d-none");
+
+  try {
+    const queryParams = new URLSearchParams({
+      package: packageId,
+      trainer: trainerId,
+      start_date: startDate,
+      weekdays: selectedWeekdays,
+      start_time: startTime,
+      end_time: endTime
+    });
+
+    const data = await apiFetch(`/pt-booking/preview/?${queryParams}`);
+
+    if (previewList) {
+      previewList.innerHTML = "";
+      let hasConflict = false;
+
+      data.sessions.forEach((session, index) => {
+        const row = document.createElement("tr");
+
+        let statusHtml = "";
+        if (session.is_valid) {
+          statusHtml = `<span class="badge bg-success-subtle text-success border border-success-subtle py-1 px-2 rounded-pill"><i class="bi bi-check-circle-fill"></i> Hợp lệ</span>`;
+        } else {
+          hasConflict = true;
+          let conflictMsg = [];
+          if (session.trainer_conflict) conflictMsg.push("PT bận");
+          if (session.user_conflict) conflictMsg.push("Bạn bận");
+          statusHtml = `<span class="badge bg-danger-subtle text-danger border border-danger-subtle py-1 px-2 rounded-pill"><i class="bi bi-x-circle-fill"></i> Trùng (${conflictMsg.join(", ")})</span>`;
+        }
+
+        row.innerHTML = `
+          <td>${index + 1}</td>
+          <td class="fw-bold text-dark">${session.date}</td>
+          <td>${session.weekday}</td>
+          <td>${statusHtml}</td>
+        `;
+        previewList.appendChild(row);
+      });
+
+      if (previewStatus) previewStatus.classList.add("d-none");
+      if (previewContainer) previewContainer.classList.remove("d-none");
+
+      if (hasConflict) {
+        if (previewConflictAlert) previewConflictAlert.classList.remove("d-none");
+        submitBtn.disabled = true;
+      } else {
+        if (previewConflictAlert) previewConflictAlert.classList.add("d-none");
+        submitBtn.disabled = false;
+      }
+    }
+  } catch (err) {
+    if (previewStatus) {
+      previewStatus.classList.remove("d-none");
+      previewStatus.className = "alert alert-danger py-3 text-center mb-0";
+      previewStatus.innerHTML = `
+        <i class="bi bi-exclamation-circle fs-4 d-block mb-2"></i>
+        <span>${err.message || "Không thể kiểm tra lịch tập lúc này."}</span>
+      `;
+    }
+    submitBtn.disabled = true;
+  }
+}
+
+async function submitPtBooking(event) {
+  event.preventDefault();
+
+  const packageSelect = document.getElementById("packageSelect");
+  const trainerSelect = document.getElementById("trainerSelect");
+  const startDateInput = document.getElementById("startDateInput");
+  const startTimeInput = document.getElementById("startTimeInput");
+  const endTimeInput = document.getElementById("endTimeInput");
+  const noteInput = document.getElementById("noteInput");
+  const checkboxes = document.querySelectorAll(".wd-checkbox");
+
+  if (!packageSelect || !trainerSelect || !startDateInput || !startTimeInput || !endTimeInput) return;
+
+  const packageId = parseInt(packageSelect.value);
+  const trainerId = parseInt(trainerSelect.value);
+  const startDate = startDateInput.value;
+  const startTime = startTimeInput.value;
+  const endTime = endTimeInput.value;
+  const note = noteInput ? noteInput.value : "";
+  const weekdays = Array.from(checkboxes)
+    .filter(cb => cb.checked)
+    .map(cb => parseInt(cb.value));
+
+  if (!packageId || !trainerId || !startDate || !startTime || !endTime || !weekdays.length) {
+    alert("Vui lòng điền đầy đủ các trường thông tin bắt buộc!");
+    return;
+  }
+
+  try {
+    const response = await apiFetch("/pt-booking/monthly/create/", {
+      method: "POST",
+      body: JSON.stringify({
+        package: packageId,
+        trainer: trainerId,
+        start_date: startDate,
+        weekdays: weekdays,
+        start_time: startTime,
+        end_time: endTime,
+        note: note
+      })
+    });
+
+    alert(response.message || "Đăng ký gói PT và tạo lịch tập thành công!");
+    window.location.href = "my-pt-packages.html";
+  } catch (err) {
+    alert("Lỗi đăng ký gói PT: " + err.message);
+  }
+}
+
+async function initMyPtPackagesPage() {
+  const container = document.getElementById("myPtPackageRows");
+  if (!container) return;
+
+  try {
+    const packages = await apiFetch("/my-pt-packages/");
+    
+    if (!packages.length) {
+      container.innerHTML = `
+        <tr>
+          <td colspan="7" class="text-center py-5">
+            <div class="empty-state">
+              <i class="bi bi-calendar-x fs-1 text-muted d-block mb-3"></i>
+              <strong>Bạn chưa đăng ký gói tập PT cá nhân nào.</strong>
+              <span>Chọn đăng ký gói để bắt đầu tập luyện cùng PT chuyên nghiệp!</span>
+              <div class="mt-3">
+                <a href="pt-packages.html" class="btn btn-brand btn-sm">Xem các gói PT</a>
+              </div>
+            </div>
+          </td>
+        </tr>
+      `;
+      return;
+    }
+
+    container.innerHTML = packages.map(pkg => {
+      let statusBadge = "";
+      if (pkg.status === 'active') {
+        statusBadge = '<span class="status-badge status-active">Đang chạy</span>';
+      } else if (pkg.status === 'completed') {
+        statusBadge = '<span class="status-badge status-completed">Hoàn thành</span>';
+      } else if (pkg.status === 'cancelled') {
+        statusBadge = '<span class="status-badge status-cancelled">Đã hủy</span>';
+      } else {
+        statusBadge = '<span class="status-badge status-expired">Hết hạn</span>';
+      }
+
+      const percent = Math.round((pkg.used_sessions / pkg.total_sessions) * 100);
+      const wdText = pkg.selected_weekdays.map(d => {
+        const labels = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
+        return labels[d] || d;
+      }).join(", ");
+
+      const startDateStr = new Date(pkg.start_date).toLocaleDateString("vi-VN");
+      const endDateStr = new Date(pkg.end_date).toLocaleDateString("vi-VN");
+
+      const startTimeFormatted = pkg.start_time.substring(0, 5);
+      const endTimeFormatted = pkg.end_time.substring(0, 5);
+
+      return `
+        <tr>
+          <td class="ps-4">
+            <div class="fw-bold text-dark">${pkg.package_name}</div>
+            <div class="text-muted small">Mã gói: #PT-SUB-${pkg.id}</div>
+          </td>
+          <td>
+            <div class="d-flex align-items-center gap-2">
+              <div class="bg-brand-light text-brand rounded-circle d-flex align-items-center justify-content-center" style="width: 32px; height: 32px; font-weight: 800; font-size: 0.8rem;">
+                ${getInitials(pkg.trainer_name)}
+              </div>
+              <div>
+                <span class="fw-semibold text-dark">${pkg.trainer_name}</span>
+              </div>
+            </div>
+          </td>
+          <td>
+            <div><i class="bi bi-clock me-1 text-muted"></i> ${startTimeFormatted} - ${endTimeFormatted}</div>
+            <div class="text-muted small">Thứ: ${wdText}</div>
+          </td>
+          <td>
+            <div class="fw-bold text-dark">${pkg.used_sessions} / ${pkg.total_sessions}</div>
+            <div class="progress mt-1" style="height: 6px; width: 80px;">
+              <div class="progress-bar bg-brand" role="progressbar" style="width: ${percent}%"></div>
+            </div>
+          </td>
+          <td>
+            <div class="small">BĐ: <span class="fw-semibold">${startDateStr}</span></div>
+            <div class="small text-muted">KT: <span>${endDateStr}</span></div>
+          </td>
+          <td>
+            ${statusBadge}
+          </td>
+          <td class="pe-4 text-end">
+            <button class="btn btn-outline-brand btn-sm" onclick="loadMyPtPackageDetail(${pkg.id})">
+              Chi tiết <i class="bi bi-chevron-right ms-1"></i>
+            </button>
+          </td>
+        </tr>
+      `;
+    }).join("");
+
+    // Check query params for deep-link
+    const urlParams = new URLSearchParams(window.location.search);
+    const detailId = urlParams.get("id");
+    if (detailId) {
+      loadMyPtPackageDetail(detailId);
+    }
+  } catch (err) {
+    console.error("Error fetching user PT packages:", err);
+    container.innerHTML = `<tr><td colspan="7" class="text-center text-danger py-4">Có lỗi xảy ra: ${err.message}</td></tr>`;
+  }
+}
+
+function showPackagesListOnly() {
+  const listCol = document.getElementById("packagesListCol");
+  const detailSection = document.getElementById("detailSection");
+
+  if (listCol) listCol.classList.remove("d-none");
+  if (detailSection) detailSection.classList.add("d-none");
+}
+
+let activeDetailPackageId = null;
+
+async function loadMyPtPackageDetail(packageId) {
+  activeDetailPackageId = packageId;
+  
+  const listCol = document.getElementById("packagesListCol");
+  const detailSection = document.getElementById("detailSection");
+
+  if (listCol) listCol.classList.add("d-none");
+  if (detailSection) detailSection.classList.remove("d-none");
+
+  // Elements
+  const headerTitle = document.getElementById("detailHeaderTitle");
+  const detailPackageName = document.getElementById("detailPackageName");
+  const detailPtAvatar = document.getElementById("detailPtAvatar");
+  const detailPtName = document.getElementById("detailPtName");
+  const detailPtEmail = document.getElementById("detailPtEmail");
+  const detailUsedSessions = document.getElementById("detailUsedSessions");
+  const detailTotalSessions = document.getElementById("detailTotalSessions");
+  const detailTimeRange = document.getElementById("detailTimeRange");
+  const detailWeekdays = document.getElementById("detailWeekdays");
+  const detailDateRange = document.getElementById("detailDateRange");
+  const detailStatusBadge = document.getElementById("detailStatusBadge");
+  const cancelPackageAction = document.getElementById("cancelPackageAction");
+  const sessionsRows = document.getElementById("ptSessionsRows");
+
+  if (headerTitle) headerTitle.textContent = `Chi tiết gói PT #PT-SUB-${packageId}`;
+  if (sessionsRows) sessionsRows.innerHTML = `<tr><td colspan="5" class="loading-state">Đang tải chi tiết lịch tập...</td></tr>`;
+
+  try {
+    const pkg = await apiFetch(`/my-pt-packages/${packageId}/`);
+
+    if (detailPackageName) detailPackageName.textContent = pkg.package_name;
+    if (detailPtAvatar) detailPtAvatar.textContent = getInitials(pkg.trainer_name);
+    if (detailPtName) detailPtName.textContent = pkg.trainer_name;
+    if (detailPtEmail) detailPtEmail.textContent = pkg.trainer_email || "-";
+    if (detailUsedSessions) detailUsedSessions.textContent = `${pkg.used_sessions} buổi`;
+    if (detailTotalSessions) detailTotalSessions.textContent = `${pkg.total_sessions} buổi`;
+    
+    const startTimeFormatted = pkg.start_time.substring(0, 5);
+    const endTimeFormatted = pkg.end_time.substring(0, 5);
+    if (detailTimeRange) detailTimeRange.textContent = `${startTimeFormatted} - ${endTimeFormatted}`;
+    
+    const wdText = pkg.selected_weekdays.map(d => {
+      const labels = ["Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7", "Chủ nhật"];
+      return labels[d] || d;
+    }).join(", ");
+    if (detailWeekdays) detailWeekdays.textContent = wdText;
+    
+    const startDateStr = new Date(pkg.start_date).toLocaleDateString("vi-VN");
+    const endDateStr = new Date(pkg.end_date).toLocaleDateString("vi-VN");
+    if (detailDateRange) detailDateRange.textContent = `${startDateStr} - ${endDateStr}`;
+
+    let statusHtml = "";
+    if (pkg.status === 'active') {
+      statusHtml = '<span class="badge bg-success-subtle text-success border border-success-subtle rounded-pill">Đang chạy</span>';
+      if (cancelPackageAction) cancelPackageAction.classList.remove("d-none");
+    } else if (pkg.status === 'completed') {
+      statusHtml = '<span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle rounded-pill">Hoàn thành</span>';
+      if (cancelPackageAction) cancelPackageAction.classList.add("d-none");
+    } else {
+      statusHtml = '<span class="badge bg-danger-subtle text-danger border border-danger-subtle rounded-pill">Đã hủy</span>';
+      if (cancelPackageAction) cancelPackageAction.classList.add("d-none");
+    }
+    if (detailStatusBadge) detailStatusBadge.innerHTML = statusHtml;
+
+    // Load bookings
+    if (sessionsRows) {
+      if (!pkg.bookings.length) {
+        sessionsRows.innerHTML = `<tr><td colspan="5" class="text-center py-4 text-muted">Không tìm thấy buổi tập nào cho gói này.</td></tr>`;
+      } else {
+        sessionsRows.innerHTML = pkg.bookings.map((booking, index) => {
+          let bStatusHtml = "";
+          if (booking.status === 'confirmed') {
+            bStatusHtml = '<span class="badge bg-success-subtle text-success border border-success-subtle rounded-pill py-1 px-2">Đã xác nhận</span>';
+          } else if (booking.status === 'completed') {
+            bStatusHtml = '<span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle rounded-pill py-1 px-2">Hoàn thành</span>';
+          } else if (booking.status === 'cancelled') {
+            bStatusHtml = '<span class="badge bg-danger-subtle text-danger border border-danger-subtle rounded-pill py-1 px-2">Đã hủy</span>';
+          } else {
+            bStatusHtml = '<span class="badge bg-warning-subtle text-warning border border-warning-subtle rounded-pill py-1 px-2">Chờ duyệt</span>';
+          }
+
+          let actionBtn = "-";
+          if (booking.status === 'confirmed') {
+            actionBtn = `<button class="btn btn-outline-danger btn-sm" onclick="confirmCancelPtBooking(${booking.id}, ${packageId})"><i class="bi bi-x-circle"></i> Hủy buổi</button>`;
+          }
+
+          const bookingDateStr = new Date(booking.booking_date).toLocaleDateString("vi-VN");
+          const bStart = booking.start_time.substring(0, 5);
+          const bEnd = booking.end_time.substring(0, 5);
+
+          return `
+            <tr>
+              <td>${index + 1}</td>
+              <td><span class="fw-semibold text-dark">${booking.booking_code}</span></td>
+              <td>
+                <div class="fw-bold text-dark">${bookingDateStr}</div>
+                <div class="text-muted small">${bStart} - ${bEnd}</div>
+              </td>
+              <td>${bStatusHtml}</td>
+              <td class="text-end">${actionBtn}</td>
+            </tr>
+          `;
+        }).join("");
+      }
+    }
+  } catch (err) {
+    console.error("Error loading PT package details:", err);
+    if (sessionsRows) sessionsRows.innerHTML = `<tr><td colspan="5" class="text-center text-danger py-4">Có lỗi xảy ra: ${err.message}</td></tr>`;
+  }
+}
+
+async function confirmCancelPtBooking(bookingId, packageId) {
+  if (!confirm("Bạn chắc chắn muốn hủy buổi tập này không?")) return;
+  try {
+    const res = await apiFetch(`/pt-booking/${bookingId}/cancel/`, {
+      method: "POST"
+    });
+    alert(res.message || "Đã hủy buổi tập thành công.");
+    // Reload details
+    loadMyPtPackageDetail(packageId);
+  } catch (err) {
+    alert("Lỗi khi hủy buổi tập: " + err.message);
+  }
+}
+
+async function confirmCancelUserPtPackage() {
+  const packageId = activeDetailPackageId;
+  if (!packageId) return;
+
+  if (!confirm("Bạn chắc chắn muốn hủy gói tập PT này? Mọi buổi tập chưa diễn ra thuộc gói sẽ bị hủy và không thể khôi phục.")) return;
+
+  try {
+    const res = await apiFetch(`/my-pt-packages/${packageId}/cancel/`, {
+      method: "POST"
+    });
+    alert(res.message || "Đã hủy gói tập PT thành công.");
+    // Reload listing & detail
+    await initMyPtPackagesPage();
+    showPackagesListOnly();
+  } catch (err) {
+    alert("Lỗi khi hủy gói tập: " + err.message);
+  }
+}
+
 

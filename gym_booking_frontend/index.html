@@ -16,13 +16,12 @@
       <div id="nav" class="collapse navbar-collapse">
         <ul class="navbar-nav ms-auto align-items-lg-center">
           <li class="nav-item"><a class="nav-link" href="classes.html">Lớp tập</a></li>
-          <li class="nav-item"><a class="nav-link" href="schedules.html">Lịch tập</a></li>
           <li class="nav-item"><a class="nav-link" href="trainers.html">HLV</a></li>
           <li class="nav-item"><a class="nav-link" href="packages.html">Gói tập</a></li>
-          <li class="nav-item"><a class="nav-link" href="/pt-packages/">Gói PT</a></li>
+          <li class="nav-item"><a class="nav-link" href="pt-packages.html">Gói PT</a></li>
           <li class="nav-item d-none" data-role="member"><a class="nav-link" href="my-bookings.html">Lịch của tôi</a></li>
-          <li class="nav-item d-none" data-role="member"><a class="nav-link" href="/my-pt-packages/">Gói PT của tôi</a></li>
-          <li class="nav-item d-none" data-role="trainer"><a class="nav-link" href="trainer-dashboard.html">Lịch dạy HLV</a></li>
+          <li class="nav-item d-none" data-role="member"><a class="nav-link" href="my-pt-packages.html">Gói PT của tôi</a></li>
+          <li class="nav-item d-none" data-role="trainer,admin"><a class="nav-link" href="trainer-dashboard.html">Lịch dạy HLV</a></li>
           <li class="nav-item d-none" data-role="admin"><a class="nav-link" href="admin-dashboard.html">Quản lý Admin</a></li>
           <li class="nav-item" data-auth="guest"><a class="nav-link" href="login.html">Đăng nhập</a></li>
           <li class="nav-item d-none" data-auth="user">
@@ -40,7 +39,10 @@
       <div class="container">
         <h1>Đặt lịch tập gym dễ dàng</h1>
         <p>Chọn lớp, đặt lịch 1-1 với HLV và quản lý gói tập trong một giao diện gọn gàng.</p>
-        <a class="btn btn-brand btn-lg" href="schedules.html">Đặt lịch ngay</a>
+        <div class="hero-actions mt-4">
+          <a class="btn btn-brand btn-lg me-3 mb-2 px-4 py-3 fw-bold" href="schedules.html">Đặt lịch ngay</a>
+          <a class="btn btn-outline-light btn-lg mb-2 px-4 py-3 fw-bold" href="packages.html">Xem gói tập</a>
+        </div>
       </div>
     </section>
     <section class="section">
@@ -52,19 +54,118 @@
           </div>
           <a class="fw-bold" href="classes.html">Xem tất cả</a>
         </div>
-        <div id="featuredClasses" class="row g-4"></div>
+        <div id="featuredClasses" class="row g-4">
+          <div class="col-md-6 col-lg-4 placeholder-glow">
+            <div class="card-ui" style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden;">
+              <div class="placeholder bg-secondary opacity-25" style="width: 100%; height: 200px; display: block;"></div>
+              <div class="p-4">
+                <span class="placeholder col-4 bg-secondary opacity-25"></span>
+                <h5 class="mt-3 mb-2 fw-bold placeholder col-8 bg-secondary opacity-25"></h5>
+                <p class="placeholder col-6 bg-secondary opacity-25"></p>
+                <div class="d-flex gap-2 mb-3">
+                  <span class="placeholder col-3 bg-secondary opacity-25"></span>
+                  <span class="placeholder col-3 bg-secondary opacity-25"></span>
+                </div>
+                <div class="placeholder col-12 bg-secondary opacity-25 py-3 rounded"></div>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-6 col-lg-4 placeholder-glow d-none d-md-block">
+            <div class="card-ui" style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden;">
+              <div class="placeholder bg-secondary opacity-25" style="width: 100%; height: 200px; display: block;"></div>
+              <div class="p-4">
+                <span class="placeholder col-4 bg-secondary opacity-25"></span>
+                <h5 class="mt-3 mb-2 fw-bold placeholder col-8 bg-secondary opacity-25"></h5>
+                <p class="placeholder col-6 bg-secondary opacity-25"></p>
+                <div class="d-flex gap-2 mb-3">
+                  <span class="placeholder col-3 bg-secondary opacity-25"></span>
+                  <span class="placeholder col-3 bg-secondary opacity-25"></span>
+                </div>
+                <div class="placeholder col-12 bg-secondary opacity-25 py-3 rounded"></div>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-6 col-lg-4 placeholder-glow d-none d-lg-block">
+            <div class="card-ui" style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden;">
+              <div class="placeholder bg-secondary opacity-25" style="width: 100%; height: 200px; display: block;"></div>
+              <div class="p-4">
+                <span class="placeholder col-4 bg-secondary opacity-25"></span>
+                <h5 class="mt-3 mb-2 fw-bold placeholder col-8 bg-secondary opacity-25"></h5>
+                <p class="placeholder col-6 bg-secondary opacity-25"></p>
+                <div class="d-flex gap-2 mb-3">
+                  <span class="placeholder col-3 bg-secondary opacity-25"></span>
+                  <span class="placeholder col-3 bg-secondary opacity-25"></span>
+                </div>
+                <div class="placeholder col-12 bg-secondary opacity-25 py-3 rounded"></div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </section>
     <section class="section section-muted">
       <div class="container">
         <h2 class="fw-bold mb-4">Huấn luyện viên nổi bật</h2>
-        <div id="featuredTrainers" class="row g-4"></div>
+        <div id="featuredTrainers" class="row g-4">
+          <div class="col-md-6 col-lg-4 placeholder-glow">
+            <div class="card-ui text-center p-4" style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);">
+              <div class="placeholder rounded-circle bg-secondary opacity-25 mx-auto mb-3" style="width: 120px; height: 120px;"></div>
+              <h5 class="placeholder col-8 bg-secondary opacity-25 mb-3"></h5>
+              <p class="placeholder col-6 bg-secondary opacity-25 mb-4"></p>
+              <div class="placeholder col-12 bg-secondary opacity-25 py-3 rounded"></div>
+            </div>
+          </div>
+          <div class="col-md-6 col-lg-4 placeholder-glow d-none d-md-block">
+            <div class="card-ui text-center p-4" style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);">
+              <div class="placeholder rounded-circle bg-secondary opacity-25 mx-auto mb-3" style="width: 120px; height: 120px;"></div>
+              <h5 class="placeholder col-8 bg-secondary opacity-25 mb-3"></h5>
+              <p class="placeholder col-6 bg-secondary opacity-25 mb-4"></p>
+              <div class="placeholder col-12 bg-secondary opacity-25 py-3 rounded"></div>
+            </div>
+          </div>
+          <div class="col-md-6 col-lg-4 placeholder-glow d-none d-lg-block">
+            <div class="card-ui text-center p-4" style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);">
+              <div class="placeholder rounded-circle bg-secondary opacity-25 mx-auto mb-3" style="width: 120px; height: 120px;"></div>
+              <h5 class="placeholder col-8 bg-secondary opacity-25 mb-3"></h5>
+              <p class="placeholder col-6 bg-secondary opacity-25 mb-4"></p>
+              <div class="placeholder col-12 bg-secondary opacity-25 py-3 rounded"></div>
+            </div>
+          </div>
+        </div>
       </div>
     </section>
     <section class="section">
       <div class="container">
         <h2 class="fw-bold mb-4">Gói tập</h2>
-        <div id="packages" class="row g-4"></div>
+        <div id="packages" class="row g-4">
+          <div class="col-md-6 col-lg-4 placeholder-glow">
+            <div class="card-ui p-4" style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);">
+              <h4 class="placeholder col-6 bg-secondary opacity-25 mb-3"></h4>
+              <div class="placeholder col-8 bg-secondary opacity-25 mb-4" style="height: 32px;"></div>
+              <p class="placeholder col-10 bg-secondary opacity-25 mb-2"></p>
+              <p class="placeholder col-8 bg-secondary opacity-25 mb-4"></p>
+              <div class="placeholder col-12 bg-secondary opacity-25 py-3 rounded"></div>
+            </div>
+          </div>
+          <div class="col-md-6 col-lg-4 placeholder-glow d-none d-md-block">
+            <div class="card-ui p-4" style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);">
+              <h4 class="placeholder col-6 bg-secondary opacity-25 mb-3"></h4>
+              <div class="placeholder col-8 bg-secondary opacity-25 mb-4" style="height: 32px;"></div>
+              <p class="placeholder col-10 bg-secondary opacity-25 mb-2"></p>
+              <p class="placeholder col-8 bg-secondary opacity-25 mb-4"></p>
+              <div class="placeholder col-12 bg-secondary opacity-25 py-3 rounded"></div>
+            </div>
+          </div>
+          <div class="col-md-6 col-lg-4 placeholder-glow d-none d-lg-block">
+            <div class="card-ui p-4" style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);">
+              <h4 class="placeholder col-6 bg-secondary opacity-25 mb-3"></h4>
+              <div class="placeholder col-8 bg-secondary opacity-25 mb-4" style="height: 32px;"></div>
+              <p class="placeholder col-10 bg-secondary opacity-25 mb-2"></p>
+              <p class="placeholder col-8 bg-secondary opacity-25 mb-4"></p>
+              <div class="placeholder col-12 bg-secondary opacity-25 py-3 rounded"></div>
+            </div>
+          </div>
+        </div>
       </div>
     </section>
   </main>

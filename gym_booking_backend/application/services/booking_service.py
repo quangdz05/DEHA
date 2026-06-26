@@ -193,9 +193,13 @@ class BookingService(IBookingService):
         return Result.success_result(bookings, status_code=200)
 
     def get_trainer_personal_bookings(self, user) -> Result:
-        from gym_booking_backend.infrastructure.models import Trainer
+        from gym_booking_backend.infrastructure.models import Trainer, TrainerBooking
 
         try:
+            if hasattr(user, "profile") and user.profile.role == "admin":
+                bookings = TrainerBooking.objects.select_related("trainer", "user__profile").all()
+                return Result.success_result(bookings, status_code=200)
+
             trainer = Trainer.objects.filter(user=user).first()
             if not trainer:
                 return Result.failure_result("Trainer profile not linked to user.", status_code=404)
@@ -211,12 +215,17 @@ class BookingService(IBookingService):
             if new_status not in [BookingStatus.CONFIRMED, BookingStatus.CANCELLED, BookingStatus.COMPLETED, BookingStatus.NO_SHOW]:
                 return Result.failure_result("Invalid booking status.", status_code=400)
 
-            trainer = Trainer.objects.filter(user=user).first()
-            if not trainer:
-                return Result.failure_result("Trainer profile not linked to user.", status_code=404)
+            is_admin = hasattr(user, "profile") and user.profile.role == "admin"
+            if not is_admin:
+                trainer = Trainer.objects.filter(user=user).first()
+                if not trainer:
+                    return Result.failure_result("Trainer profile not linked to user.", status_code=404)
 
             booking = booking_repository.get_trainer_booking_by_id(booking_id)
-            if not booking or booking.trainer_id != trainer.id:
+            if not booking:
+                return Result.failure_result("Trainer booking not found.", status_code=404)
+                
+            if not is_admin and booking.trainer_id != trainer.id:
                 return Result.failure_result("Trainer booking not found.", status_code=404)
 
             booking.status = new_status
@@ -303,9 +312,13 @@ class BookingService(IBookingService):
         return Result.success_result(bookings, status_code=200)
 
     def get_trainer_monthly_bookings(self, user) -> Result:
-        from gym_booking_backend.infrastructure.models import Trainer
+        from gym_booking_backend.infrastructure.models import Trainer, TrainerMonthlyBooking
 
         try:
+            if hasattr(user, "profile") and user.profile.role == "admin":
+                bookings = TrainerMonthlyBooking.objects.select_related("trainer", "user__profile").all()
+                return Result.success_result(bookings, status_code=200)
+
             trainer = Trainer.objects.filter(user=user).first()
             if not trainer:
                 return Result.failure_result("Trainer profile not linked to user.", status_code=404)
@@ -321,12 +334,17 @@ class BookingService(IBookingService):
             if new_status not in [BookingStatus.CONFIRMED, BookingStatus.CANCELLED, BookingStatus.COMPLETED]:
                 return Result.failure_result("Invalid booking status.", status_code=400)
 
-            trainer = Trainer.objects.filter(user=user).first()
-            if not trainer:
-                return Result.failure_result("Trainer profile not linked to user.", status_code=404)
+            is_admin = hasattr(user, "profile") and user.profile.role == "admin"
+            if not is_admin:
+                trainer = Trainer.objects.filter(user=user).first()
+                if not trainer:
+                    return Result.failure_result("Trainer profile not linked to user.", status_code=404)
 
             booking = booking_repository.get_trainer_monthly_booking_by_id(booking_id)
-            if not booking or booking.trainer_id != trainer.id:
+            if not booking:
+                return Result.failure_result("Monthly trainer booking not found.", status_code=404)
+                
+            if not is_admin and booking.trainer_id != trainer.id:
                 return Result.failure_result("Monthly trainer booking not found.", status_code=404)
 
             booking.status = new_status

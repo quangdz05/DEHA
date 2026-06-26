@@ -1,7 +1,7 @@
 from django.urls import path
 
 from gym_booking_backend.presentation.chatbot import ChatbotAPIView
-from gym_booking_backend.presentation import views, jwt_views, password_reset_views, two_factor_views
+from gym_booking_backend.presentation import views, jwt_views, password_reset_views, two_factor_views, pt_views
 
 urlpatterns = [
     path("chat", ChatbotAPIView.as_view(), name="chatbot-chat-no-slash"),
@@ -78,4 +78,15 @@ urlpatterns = [
     path("admin/classes/create/", views.AdminCreateGymClassAPIView.as_view(), name="admin-class-create"),
     path("admin/packages/create/", views.AdminCreatePackageAPIView.as_view(), name="admin-package-create"),
     path("admin/packages/<int:package_id>/", views.AdminPackageDetailAPIView.as_view(), name="admin-package-detail"),
+    
+    # PT REST APIs
+    path("pt-packages/", pt_views.PTPackageListAPIView.as_view(), name="api-pt-package-list"),
+    path("pt-booking/monthly/create/", pt_views.MonthlyPTBookingCreateAPIView.as_view(), name="api-monthly-pt-booking-create"),
+    path("my-pt-packages/", pt_views.UserPTPackageListAPIView.as_view(), name="api-user-pt-package-list"),
+    path("my-pt-packages/<int:pk>/", pt_views.UserPTPackageDetailAPIView.as_view(), name="api-user-pt-package-detail"),
+    path("pt-booking/<int:pk>/cancel/", pt_views.CancelPTBookingAPIView.as_view(), name="api-cancel-pt-booking"),
+    path("my-pt-packages/<int:pk>/cancel/", pt_views.CancelUserPTPackageAPIView.as_view(), name="api-cancel-user-pt-package"),
+    path("pt-booking/preview/", pt_views.PTBookingPreviewAPIView.as_view(), name="api-pt-booking-preview"),
 ]
+
+

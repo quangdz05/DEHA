@@ -18,6 +18,10 @@ from gym_booking_backend.infrastructure.models import (
     MembershipFreeze,
     Invoice,
     InvoiceItem,
+    PTPackage,
+    UserPTPackage,
+    PTBooking,
+    TrainerSchedule,
 )
 
 
@@ -434,3 +438,84 @@ class InvoiceSerializer(serializers.ModelSerializer):
     class Meta:
         model = Invoice
         fields = "__all__"
+
+
+class PTPackageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PTPackage
+        fields = "__all__"
+
+
+class TrainerScheduleSerializer(serializers.ModelSerializer):
+    trainer_name = serializers.CharField(source="trainer.name", read_only=True)
+
+    class Meta:
+        model = TrainerSchedule
+        fields = "__all__"
+
+
+class PTBookingSerializer(serializers.ModelSerializer):
+    user_username = serializers.CharField(source="user.username", read_only=True)
+    trainer_name = serializers.CharField(source="trainer.name", read_only=True)
+
+    class Meta:
+        model = PTBooking
+        fields = "__all__"
+        read_only_fields = ("id", "booking_code", "created_at", "updated_at")
+
+
+class UserPTPackageSerializer(serializers.ModelSerializer):
+    user_username = serializers.CharField(source="user.username", read_only=True)
+    trainer_name = serializers.CharField(source="trainer.name", read_only=True)
+    trainer_email = serializers.EmailField(source="trainer.email", read_only=True)
+    package_name = serializers.CharField(source="package.name", read_only=True)
+    bookings = PTBookingSerializer(many=True, read_only=True)
+    remaining_sessions = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = UserPTPackage
+        fields = (
+            "id",
+            "user",
+            "user_username",
+            "trainer",
+            "trainer_name",
+            "trainer_email",
+            "package",
+            "package_name",
+            "start_date",
+            "end_date",
+            "total_sessions",
+            "used_sessions",
+            "remaining_sessions",
+            "status",
+            "selected_weekdays",
+            "start_time",
+            "end_time",
+            "bookings",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = ("id", "user", "user_username", "trainer_name", "trainer_email", "package_name", "total_sessions", "used_sessions", "remaining_sessions", "status", "bookings", "created_at", "updated_at")
+
+
+class MonthlyPTBookingCreateSerializer(serializers.Serializer):
+    package = serializers.IntegerField()
+    trainer = serializers.IntegerField()
+    start_date = serializers.DateField()
+    weekdays = serializers.ListField(child=serializers.IntegerField(min_value=0, max_value=6))
+    start_time = serializers.TimeField()
+    end_time = serializers.TimeField()
+    note = serializers.CharField(required=False, allow_blank=True, default="")
+
+    def validate_start_date(self, value):
+        from django.utils import timezone
+        if value < timezone.localdate():
+            raise serializers.ValidationError("Ngày bắt đầu không được nhỏ hơn ngày hôm nay.")
+        return value
+
+    def validate(self, data):
+        if data["start_time"] >= data["end_time"]:
+            raise serializers.ValidationError("Giờ bắt đầu phải trước giờ kết thúc.")
+        return data
+
