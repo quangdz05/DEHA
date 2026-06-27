@@ -7,3 +7,5 @@ from .profile_service import profile_service
 from .pt_booking_service import pt_booking_service
 from .review_service import review_service
 from .schedule_service import schedule_service
+from .email_service import send_dynamic_recovery_email
+

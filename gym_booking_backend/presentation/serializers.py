@@ -28,10 +28,19 @@ from gym_booking_backend.infrastructure.models import (
 class UserRegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, min_length=6)
     role = serializers.CharField(required=False, default="member")
+    email = serializers.EmailField(required=True)
 
     class Meta:
         model = User
         fields = ("username", "email", "password", "first_name", "last_name", "role")
+
+    def validate_email(self, value):
+        if not value:
+            raise serializers.ValidationError("Email không được để trống.")
+        value = value.strip()
+        if User.objects.filter(email=value).exists():
+            raise serializers.ValidationError("Email này đã được sử dụng bởi một tài khoản khác.")
+        return value
 
 
 class ProfileSerializer(serializers.ModelSerializer):
@@ -55,10 +64,11 @@ class ProfileSerializer(serializers.ModelSerializer):
             "emergency_contact_phone",
             "health_notes",
             "fitness_goals",
+            "two_factor_enabled",
             "created_at",
             "updated_at",
         )
-        read_only_fields = ("id", "username", "email", "role", "created_at", "updated_at")
+        read_only_fields = ("id", "username", "email", "role", "two_factor_enabled", "created_at", "updated_at")
 
 
 class TrainerSerializer(serializers.ModelSerializer):

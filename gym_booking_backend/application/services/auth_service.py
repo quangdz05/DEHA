@@ -13,6 +13,12 @@ class AuthService(IAuthService):
     def register_user(self, username, email, password, first_name="", last_name="", role="member") -> Result:
         if user_repository.get_user_by_username(username):
             return Result.failure_result("Username already exists.", status_code=400)
+        if not email:
+            return Result.failure_result("Email không được để trống.", status_code=400)
+        email = email.strip()
+        from django.contrib.auth.models import User
+        if User.objects.filter(email=email).exists():
+            return Result.failure_result("Email này đã được sử dụng bởi một tài khoản khác.", status_code=400)
         try:
             with transaction.atomic():
                 user = user_repository.create_user(username, email, password, first_name, last_name)

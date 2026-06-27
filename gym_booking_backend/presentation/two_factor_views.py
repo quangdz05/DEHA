@@ -22,6 +22,13 @@ class TwoFactorSetupAPIView(BaseAPIView):
         if profile.two_factor_enabled:
             return self.handle_result(Result.failure_result("Tài khoản của bạn đã được bật 2FA trước đó.", status_code=400))
 
+        email = (request.user.email or "").strip()
+        if not email:
+            return self.handle_result(Result.failure_result("Tài khoản chưa có email. Vui lòng cập nhật email trước khi kích hoạt xác thực 2 lớp.", status_code=400))
+
+        if User.objects.filter(email=email).exclude(id=request.user.id).exists():
+            return self.handle_result(Result.failure_result("Email này đã được sử dụng bởi một tài khoản khác. Mỗi tài khoản chỉ được dùng 1 email duy nhất.", status_code=400))
+
         # Generate new base32 secret
         secret = pyotp.random_base32()
         profile.two_factor_secret = secret
@@ -118,6 +125,7 @@ class TwoFactorVerifyAPIView(BaseAPIView):
                 "email": user.email,
                 "role": profile.role,
                 "full_name": profile.full_name,
+                "two_factor_enabled": profile.two_factor_enabled,
                 "access": access_token
             }
             

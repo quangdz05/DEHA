@@ -620,3 +620,51 @@ class PTBooking(TimestampedModel):
 
     def __str__(self):
         return f"{self.booking_code} - {self.booking_date} ({self.start_time}-{self.end_time})"
+
+
+class EmailSetting(models.Model):
+    """
+    Model lưu trữ cấu hình máy chủ gửi thư SMTP động từ giao diện quản trị.
+    """
+    email_host = models.CharField(
+        max_length=255, 
+        verbose_name="SMTP Host", 
+        help_text="Ví dụ: smtp.gmail.com"
+    )
+    email_port = models.IntegerField(
+        default=587, 
+        verbose_name="SMTP Port"
+    )
+    email_host_user = models.CharField(
+        max_length=255, 
+        verbose_name="Tài khoản Email", 
+        help_text="Địa chỉ email dùng để gửi thư"
+    )
+    email_host_password = models.CharField(
+        max_length=255, 
+        verbose_name="Mật khẩu ứng dụng", 
+        help_text="Mật khẩu hoặc mật khẩu ứng dụng SMTP (App Password)"
+    )
+    email_use_tls = models.BooleanField(
+        default=True, 
+        verbose_name="Sử dụng TLS"
+    )
+    is_active = models.BooleanField(
+        default=False, 
+        verbose_name="Kích hoạt", 
+        help_text="Chỉ có duy nhất một cấu hình được kích hoạt tại một thời điểm"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Cấu hình Email SMTP"
+        verbose_name_plural = "Cấu hình Email SMTP"
+
+    def __str__(self):
+        return f"{self.email_host_user} ({self.email_host})"
+
+    def save(self, *args, **kwargs):
+        if self.is_active:
+            EmailSetting.objects.filter(is_active=True).exclude(pk=self.pk).update(is_active=False)
+        super().save(*args, **kwargs)

@@ -38,16 +38,14 @@ class ForgotPasswordAPIView(BaseAPIView):
 
             reset_link = f"{frontend_base}/reset-password.html?uid={uid}&token={token}"
 
+            from gym_booking_backend.application.services.email_service import send_dynamic_recovery_email
             try:
-                send_mail(
-                    subject="Khôi phục mật khẩu - Gym Booking",
-                    message=f"Chào {user.get_full_name() or user.username},\n\nVui lòng nhấn vào liên kết dưới đây để đặt lại mật khẩu của bạn:\n{reset_link}\n\nLiên kết này có hiệu lực một lần và sẽ hết hạn sau khi sử dụng.\n\nTrân trọng,\nGym Booking Support",
-                    from_email="noreply@gym.local",
-                    recipient_list=[email],
-                    fail_silently=False,
-                )
+                success = send_dynamic_recovery_email(email, reset_link)
+                if not success:
+                    return self.handle_result(Result.failure_result("Lỗi hệ thống khi gửi email khôi phục.", status_code=500))
+            except ValueError as val_err:
+                return self.handle_result(Result.failure_result(str(val_err), status_code=400))
             except Exception as e:
-                # Log the error but don't crash
                 print("Failed to send email:", e)
                 return self.handle_result(Result.failure_result("Lỗi hệ thống khi gửi email khôi phục.", status_code=500))
 

@@ -21,14 +21,15 @@ from .models import (
     TrainerSchedule,
     UserPTPackage,
     PTBooking,
+    EmailSetting,
 )
 
 
 @admin.register(Profile)
 class ProfileAdmin(admin.ModelAdmin):
-    list_display = ("id", "user", "full_name", "phone", "gender", "created_at")
+    list_display = ("id", "user", "full_name", "phone", "gender", "two_factor_enabled", "created_at")
     search_fields = ("user__username", "full_name", "phone")
-    list_filter = ("gender", "created_at")
+    list_filter = ("gender", "two_factor_enabled", "created_at")
 
 
 # VĐ #12: Thêm is_deleted vào list_filter cho các model SoftDelete
@@ -203,3 +204,10 @@ class PTBookingAdmin(admin.ModelAdmin):
     list_display = ("id", "booking_code", "user", "trainer", "booking_date", "start_time", "end_time", "status")
     search_fields = ("booking_code", "user__username", "trainer__name")
     list_filter = ("status", "booking_date")
+
+
+@admin.register(EmailSetting)
+class EmailSettingAdmin(admin.ModelAdmin):
+    list_display = ("id", "email_host_user", "email_host", "email_port", "email_use_tls", "is_active", "updated_at")
+    list_filter = ("is_active", "email_use_tls")
+    search_fields = ("email_host_user", "email_host")

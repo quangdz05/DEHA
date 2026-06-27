@@ -69,6 +69,7 @@ class LoginAPIView(BaseAPIView):
             "email": user.email,
             "role": profile.role,
             "full_name": profile.full_name,
+            "two_factor_enabled": profile.two_factor_enabled,
             "access": access_token
         }
         # Sync with Django session
@@ -107,6 +108,7 @@ class TokenRefreshAPIView(BaseAPIView):
             "email": user.email,
             "role": profile.role if profile else "member",
             "full_name": profile.full_name if profile else user.username,
+            "two_factor_enabled": profile.two_factor_enabled if profile else False,
         }
         
         return self.handle_result(Result.success_result(data, status_code=200))
