@@ -6,7 +6,7 @@ Tài liệu này cung cấp cái nhìn chi tiết về cấu trúc cơ sở dữ
 
 ## 1. Chi Tiết Các Bảng Dữ Liệu Hiện Tại (Current Database Schema)
 
-Hệ thống bao gồm 21 thực thể (bảng dữ liệu) chính được phân nhóm theo nghiệp vụ:
+Hệ thống bao gồm 20 thực thể (bảng dữ liệu) chính được phân nhóm theo nghiệp vụ:
 
 ### Nhóm 1: Người Dùng & Phân Quyền
 
@@ -365,28 +365,9 @@ Giao dịch thanh toán thực tế của khách hàng thông qua MoMo, VNPay ho
 
 ---
 
-### Nhóm 8: Cấu hình Hệ thống
-
-#### 21. Bảng `EmailSetting` (Cấu hình Email SMTP)
-Model lưu trữ cấu hình máy chủ gửi thư SMTP động từ giao diện quản trị.
-
-| Tên trường | Kiểu dữ liệu | Ràng buộc / Khóa ngoại | Mô tả |
-| :--- | :--- | :--- | :--- |
-| `id` | BigAutoField | Primary Key | ID tự tăng |
-| `email_host` | CharField(255) | | SMTP Host (Ví dụ: `smtp.gmail.com`) |
-| `email_port` | IntegerField | `default=587` | Cổng gửi SMTP (SMTP Port) |
-| `email_host_user` | CharField(255) | | Địa chỉ tài khoản email dùng để gửi thư |
-| `email_host_password` | CharField(255) | | Mật khẩu ứng dụng SMTP (App Password) |
-| `email_use_tls` | BooleanField | `default=True` | Có sử dụng TLS bảo mật không |
-| `is_active` | BooleanField | `default=False` | Kích hoạt cấu hình (chỉ 1 cấu hình active) |
-| `created_at` | DateTimeField | `auto_now_add=True` | Thời điểm tạo cấu hình |
-| `updated_at` | DateTimeField | `auto_now=True` | Thời điểm cập nhật cuối |
-
----
-
 ## 2. Sơ Đồ Quan Hệ Thực Thể Hiện Tại (Current Entity Relationship Diagram)
 
-Dưới đây là sơ đồ Mermaid ERD mô tả các mối liên kết thực tế của 21 bảng dữ liệu hiện tại trong hệ thống Gym Booking:
+Dưới đây là sơ đồ Mermaid ERD mô tả các mối liên kết thực tế của 20 bảng dữ liệu hiện tại trong hệ thống Gym Booking:
 
 ```mermaid
 erDiagram
@@ -431,8 +412,6 @@ erDiagram
 
     Invoice ||--o{ InvoiceItem : "billing_details"
     Invoice ||--o{ Payment : "settles"
-    EmailSetting
-
 ```
 
 ---
