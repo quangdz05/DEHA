@@ -1317,8 +1317,7 @@ function trainerCard(item) {
       </div>
       ${certs}
       <div class="d-grid gap-2 mt-3">
-        <button class="btn btn-brand" onclick="openTrainerBookingModal(${item.id}, '${escapeJsString(item.name)}')">Đặt lịch 1-1</button>
-        <button class="btn btn-outline-brand" type="button" onclick="showTrainerDetail(${item.id})">Xem chi tiết</button>
+        <button class="btn btn-brand" type="button" onclick="showTrainerDetail(${item.id})">Xem chi tiết</button>
       </div>
     </div>
   </div>`;
@@ -1460,41 +1459,7 @@ async function showTrainerDetail(trainerId) {
               ${reviewsHtml}
             </div>
 
-            <h5 class="fw-bold mb-2 text-dark"><i class="bi bi-calendar3 text-brand me-2"></i>Lịch dạy lớp tập</h5>
-            <div class="table-responsive border rounded mb-2" style="max-height: 150px; overflow-y: auto;">
-              <table class="table table-hover table-sm align-middle mb-0" style="font-size: 0.8rem;">
-                <thead class="table-light sticky-top">
-                  <tr>
-                    <th>Lớp</th>
-                    <th>Phòng</th>
-                    <th>Thời gian</th>
-                    <th>Chỗ</th>
-                    <th>Hành động</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${schedules && schedules.length ? schedules.map(s => {
-                    let actionBtn = "";
-                    if (s.status === "open" && s.available_slots > 0) {
-                      actionBtn = `<button class="btn btn-sm btn-brand py-0 px-2" style="font-size: 0.75rem;" onclick="bookScheduleFromDetail(${s.id}, ${trainerId})">Đặt</button>`;
-                    } else if (s.status === "full" || (s.status === "open" && s.available_slots <= 0)) {
-                      actionBtn = `<button class="btn btn-sm btn-warning text-dark fw-bold py-0 px-2" style="font-size: 0.75rem;" onclick="bookScheduleFromDetail(${s.id}, ${trainerId})">Chờ</button>`;
-                    } else {
-                      actionBtn = `<button class="btn btn-sm btn-secondary py-0 px-2" style="font-size: 0.75rem;" disabled>Hủy</button>`;
-                    }
-                    return `
-                      <tr>
-                        <td><strong>${s.gym_class_name}</strong></td>
-                        <td>${s.room_name}</td>
-                        <td>${formatDateTime(s.start_time)}</td>
-                        <td>${s.available_slots}/${s.max_participants}</td>
-                        <td>${actionBtn}</td>
-                      </tr>
-                    `;
-                  }).join("") : `<tr><td colspan="5" class="text-center text-muted small py-2">Chưa có lịch dạy lớp tập nào.</td></tr>`}
-                </tbody>
-              </table>
-            </div>
+
           </div>
         </div>
       </div>
@@ -3100,9 +3065,26 @@ function setupPtBookingFormListeners() {
   const startDateInput = document.getElementById("startDateInput");
   const startTimeInput = document.getElementById("startTimeInput");
   const endTimeInput = document.getElementById("endTimeInput");
+  const sessionsCountInput = document.getElementById("sessionsCountInput");
   const checkboxes = document.querySelectorAll(".wd-checkbox");
 
-  const elements = [packageSelect, trainerSelect, startDateInput, startTimeInput, endTimeInput];
+  if (startTimeInput && endTimeInput && sessionsCountInput) {
+    const autoCalcEnd = function () {
+      const startVal = startTimeInput.value;
+      const caCount = parseInt(sessionsCountInput.value, 10) || 1;
+      if (startVal) {
+        const [h, m] = startVal.split(":").map(Number);
+        const endH = (h + caCount) % 24;
+        const endVal = `${String(endH).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+        endTimeInput.value = endVal;
+      }
+    };
+    startTimeInput.addEventListener("input", autoCalcEnd);
+    startTimeInput.addEventListener("change", autoCalcEnd);
+    sessionsCountInput.addEventListener("change", autoCalcEnd);
+  }
+
+  const elements = [packageSelect, trainerSelect, startDateInput, startTimeInput, endTimeInput, sessionsCountInput];
   elements.forEach(el => {
     if (el) el.addEventListener("change", triggerPtBookingPreview);
   });

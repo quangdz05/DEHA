@@ -160,14 +160,24 @@
                   </div>
                 </div>
 
+                <div class="mb-3">
+                  <label class="form-label fw-bold text-dark" for="sessionsCountInput">Số ca đăng ký (1 ca = 1 tiếng)</label>
+                  <select id="sessionsCountInput" class="form-select" required>
+                    <option value="1" selected>1 ca (1 tiếng)</option>
+                    <option value="2">2 ca (2 tiếng)</option>
+                    <option value="3">3 ca (3 tiếng)</option>
+                    <option value="4">4 ca (4 tiếng)</option>
+                  </select>
+                </div>
+
                 <div class="row mb-3">
                   <div class="col-6">
                     <label class="form-label fw-bold text-dark" for="startTimeInput">Giờ bắt đầu</label>
                     <input type="time" id="startTimeInput" class="form-control" required>
                   </div>
                   <div class="col-6">
-                    <label class="form-label fw-bold text-dark" for="endTimeInput">Giờ kết thúc</label>
-                    <input type="time" id="endTimeInput" class="form-control" required>
+                    <label class="form-label fw-bold text-dark" for="endTimeInput">Giờ kết thúc (Tự động tính)</label>
+                    <input type="time" id="endTimeInput" class="form-control" readonly required>
                   </div>
                 </div>
 

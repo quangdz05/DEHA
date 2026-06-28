@@ -389,6 +389,10 @@ async function setAuthNav() {
 
 function injectLayout() {
   const currentPage = getCurrentPage();
+  if (currentPage === "classes.html" || currentPage === "schedules.html") {
+    window.location.href = "index.html";
+    return;
+  }
 
   // Favicon injection
   let favLink = document.querySelector("link[rel='icon']");
@@ -421,18 +425,20 @@ function injectLayout() {
       <button class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#nav" aria-label="Mở menu"><span class="navbar-toggler-icon"></span></button>
       <div id="nav" class="collapse navbar-collapse">
         <ul class="navbar-nav ms-auto align-items-lg-center">
-          <li class="nav-item"><a class="nav-link" href="classes.html">Lớp tập</a></li>
           <li class="nav-item"><a class="nav-link" href="trainers.html">HLV</a></li>
           <li class="nav-item"><a class="nav-link" href="packages.html">Gói tập</a></li>
           <li class="nav-item"><a class="nav-link" href="pt-packages.html">Gói PT</a></li>
           <li class="nav-item d-none" data-role="member"><a class="nav-link" href="my-bookings.html">Lịch của tôi</a></li>
           <li class="nav-item d-none" data-role="member"><a class="nav-link" href="my-pt-packages.html">Gói PT của tôi</a></li>
+          <li class="nav-item d-none" data-role="trainer,admin,member"><a class="nav-link" href="trainer-schedule.html">Lịch làm việc HLV</a></li>
           <li class="nav-item d-none" data-role="trainer,admin"><a class="nav-link" href="trainer-dashboard.html">Lịch dạy HLV</a></li>
           <li class="nav-item d-none" data-role="admin"><a class="nav-link" href="admin-dashboard.html">Quản lý Admin</a></li>
           <li class="nav-item" data-auth="guest"><a class="nav-link" href="login.html">Đăng nhập</a></li>
           <li class="nav-item d-none" data-auth="user">
-            <span id="navUserName" class="me-lg-2 text-light"></span>
-            <button class="btn btn-outline-light btn-sm ms-lg-2" onclick="logout()">Đăng xuất</button>
+            <div class="d-flex align-items-center gap-2 mt-2 mt-lg-0">
+              <span id="navUserName"></span>
+              <button class="btn btn-outline-light" onclick="logout()">Đăng xuất</button>
+            </div>
           </li>
         </ul>
       </div>
@@ -469,7 +475,6 @@ function injectLayout() {
         <div class="col-md-4">
           <h6 class="text-uppercase fw-bold text-white mb-3">Liên kết nhanh</h6>
           <ul class="list-unstyled text-secondary small d-flex flex-column gap-2">
-            <li><a href="classes.html" class="text-secondary">Lớp tập</a></li>
             <li><a href="trainers.html" class="text-secondary">Huấn luyện viên (HLV)</a></li>
             <li><a href="packages.html" class="text-secondary">Gói tập hội viên</a></li>
             <li><a href="pt-packages.html" class="text-secondary">Gói PT cá nhân</a></li>

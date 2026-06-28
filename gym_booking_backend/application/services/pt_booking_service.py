@@ -30,7 +30,7 @@ def get_session_dates(start_date, selected_weekdays, total_sessions, duration_da
 
 
 def get_trainer_busy_slots(trainer, start_date, end_date):
-    from gym_booking_backend.infrastructure.models import PTBooking, TrainerBooking, ClassSchedule
+    from gym_booking_backend.infrastructure.models import PTBooking, TrainerBooking
     
     ACTIVE_PT_STATUSES = ["pending", "confirmed"]
     ACTIVE_BOOKING_STATUSES = ["pending", "confirmed"]
@@ -67,23 +67,6 @@ def get_trainer_busy_slots(trainer, start_date, end_date):
             "start_time": start_dt.time().strftime("%H:%M"),
             "end_time": end_dt.time().strftime("%H:%M"),
             "description": f"Trainer Booking ({start_dt.time().strftime('%H:%M')} - {end_dt.time().strftime('%H:%M')})"
-        })
-        
-    # 3. ClassSchedule
-    class_schedules = ClassSchedule.objects.filter(
-        trainer=trainer,
-        start_time__date__range=[start_date, end_date],
-        status__in=["open", "full"]
-    ).order_by('start_time')
-    for cs in class_schedules:
-        start_dt = cs.start_time
-        end_dt = cs.end_time
-        busy.append({
-            "type": "class_schedule",
-            "date": start_dt.date().strftime("%Y-%m-%d"),
-            "start_time": start_dt.time().strftime("%H:%M"),
-            "end_time": end_dt.time().strftime("%H:%M"),
-            "description": f"Class Schedule: {cs.gym_class.name} ({start_dt.time().strftime('%H:%M')} - {end_dt.time().strftime('%H:%M')})"
         })
         
     busy.sort(key=lambda x: (x["date"], x["start_time"]))

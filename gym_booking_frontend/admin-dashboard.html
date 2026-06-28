@@ -84,31 +84,15 @@
       </div>
 
       <ul class="nav nav-tabs nav-tabs-custom" id="adminTabs" role="tablist">
-        <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#bookings-pane" type="button"><i class="bi bi-calendar2-week me-1"></i> Đặt lịch</button></li>
-        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#trainer-students-pane" type="button" onclick="loadAdminTrainerStudents()"><i class="bi bi-person-lines-fill me-1"></i> Học viên HLV</button></li>
+        <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#trainer-students-pane" type="button" onclick="loadAdminTrainerStudents()"><i class="bi bi-person-lines-fill me-1"></i> Học viên HLV</button></li>
         <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#payments-pane" type="button"><i class="bi bi-credit-card me-1"></i> Thanh toán</button></li>
         <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#invoices-pane" type="button" onclick="loadAdminInvoices()"><i class="bi bi-file-earmark-ruled me-1"></i> Hóa đơn</button></li>
-        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#schedules-pane" type="button" onclick="loadScheduleSetupForm()"><i class="bi bi-clock-history me-1"></i> Lịch tập</button></li>
         <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#users-pane" type="button" onclick="loadAdminTrainerList()"><i class="bi bi-people me-1"></i> Tài khoản + HLV</button></li>
-        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#classes-pane" type="button" onclick="loadAdminClassForm()"><i class="bi bi-grid-3x3-gap me-1"></i> Lớp tập</button></li>
         <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#packages-pane" type="button" onclick="loadAdminPackageList()"><i class="bi bi-box-seam me-1"></i> Gói tập</button></li>
       </ul>
 
       <div class="tab-content" id="adminTabsContent">
-        <div class="tab-pane fade show active" id="bookings-pane">
-          <div class="card border-0 shadow-sm rounded-3">
-            <div class="card-body p-0">
-              <div class="table-responsive">
-                <table class="table table-hover align-middle mb-0">
-                  <thead class="table-light"><tr><th>Mã</th><th>Hội viên</th><th>Lớp & Thời gian</th><th>Trạng thái</th><th>Ghi chú</th><th>Hành động</th></tr></thead>
-                  <tbody id="adminBookingRows"><tr><td colspan="6" class="text-center py-4 text-muted">Đang tải...</td></tr></tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="tab-pane fade" id="trainer-students-pane">
+        <div class="tab-pane fade show active" id="trainer-students-pane">
           <div class="card border-0 shadow-sm rounded-3">
             <div class="card-body p-0">
               <div class="table-responsive">
@@ -147,63 +131,7 @@
           </div>
         </div>
 
-        <div class="tab-pane fade" id="schedules-pane">
-          <div class="row g-4">
-            <div class="col-md-5">
-              <div class="card border-0 shadow-sm rounded-3 p-4 bg-white">
-                <h5 class="fw-bold mb-4"><i class="bi bi-plus-circle text-brand me-2"></i>Thêm lịch tập</h5>
-                <form id="createScheduleForm" onsubmit="submitCreateSchedule(event)">
-                  <div class="mb-3"><label class="form-label fw-bold" for="schedClass">Lớp học</label><select class="form-select" id="schedClass" name="gym_class" required></select></div>
-                  <div class="mb-3"><label class="form-label fw-bold" for="schedRoom">Phòng tập</label><select class="form-select" id="schedRoom" name="room" required></select></div>
-                  <div class="mb-3"><label class="form-label fw-bold" for="schedTrainer">HLV (không bắt buộc)</label><select class="form-select" id="schedTrainer" name="trainer"><option value="">-- Mặc định theo lớp --</option></select></div>
-                  <div class="mb-3"><label class="form-label fw-bold" for="schedStartTime">Giờ bắt đầu</label><input type="datetime-local" class="form-control" id="schedStartTime" name="start_time" required></div>
-                  <div class="mb-3"><label class="form-label fw-bold" for="schedEndTime">Giờ kết thúc</label><input type="datetime-local" class="form-control" id="schedEndTime" name="end_time" required></div>
-                  <div class="mb-3"><label class="form-label fw-bold" for="schedMaxPart">Sĩ số tối đa</label><input type="number" class="form-control" id="schedMaxPart" name="max_participants" min="1" value="20" required></div>
-                  <div id="scheduleWarning" class="alert alert-danger d-none py-2 mb-3"></div>
-                  <button type="submit" class="btn btn-brand w-100">Tạo lịch</button>
-                </form>
-              </div>
-            </div>
-            <div class="col-md-7">
-              <div class="card border-0 shadow-sm rounded-3">
-                <div class="card-header bg-white py-3"><h5 class="fw-bold mb-0 text-dark">Danh sách lịch tập</h5></div>
-                <div class="card-body p-0">
-                  <div class="table-responsive">
-                    <table class="table table-hover align-middle mb-0">
-                      <thead class="table-light"><tr><th>Lớp học</th><th>HLV</th><th>Phòng</th><th>Thời gian</th><th>Hành động</th></tr></thead>
-                      <tbody id="adminScheduleListRows"><tr><td colspan="5" class="text-center py-4 text-muted">Đang tải...</td></tr></tbody>
-                    </table>
-                  </div>
-                </div>
-              </div>
 
-              <div class="card border-0 shadow-sm rounded-3 mt-4">
-                <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
-                  <h5 class="fw-bold mb-0 text-dark"><i class="bi bi-exclamation-triangle text-danger me-2"></i>Lịch chưa phân công HLV</h5>
-                  <button class="btn btn-sm btn-outline-secondary" onclick="loadAdminUnassignedSchedules()"><i class="bi bi-arrow-clockwise"></i> Làm mới</button>
-                </div>
-                <div class="card-body p-0">
-                  <div class="table-responsive">
-                    <table class="table table-hover align-middle mb-0">
-                      <thead class="table-light">
-                        <tr>
-                          <th>Lớp học</th>
-                          <th>Phòng</th>
-                          <th>Thời gian</th>
-                          <th>Phân công HLV</th>
-                          <th>Thao tác</th>
-                        </tr>
-                      </thead>
-                      <tbody id="adminUnassignedScheduleListRows">
-                        <tr><td colspan="5" class="text-center py-4 text-muted">Đang tải...</td></tr>
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
 
         <div class="tab-pane fade" id="users-pane">
           <div class="row g-4">
@@ -248,38 +176,7 @@
           </div>
         </div>
 
-        <div class="tab-pane fade" id="classes-pane">
-          <div class="row g-4">
-            <div class="col-md-5">
-              <div class="card border-0 shadow-sm rounded-3 p-4 bg-white">
-                <h5 class="fw-bold mb-4"><i class="bi bi-plus-circle text-brand me-2"></i>Thêm lớp tập</h5>
-                <form id="createClassForm" onsubmit="submitCreateClass(event)">
-                  <div class="mb-3"><label class="form-label fw-bold" for="className">Tên lớp</label><input type="text" class="form-control" id="className" name="name" required></div>
-                  <div class="mb-3"><label class="form-label fw-bold" for="classCategory">Danh mục</label><select class="form-select" id="classCategory" name="category" required></select></div>
-                  <div class="mb-3"><label class="form-label fw-bold" for="classTrainer">HLV phụ trách</label><select class="form-select" id="classTrainer" name="trainer" required></select></div>
-                  <div class="mb-3"><label class="form-label fw-bold" for="classDifficulty">Độ khó</label><select class="form-select" id="classDifficulty" name="difficulty_level"><option value="beginner">Beginner</option><option value="intermediate">Intermediate</option><option value="advanced">Advanced</option></select></div>
-                  <div class="mb-3"><label class="form-label fw-bold" for="classDuration">Thời lượng (phút)</label><input type="number" class="form-control" id="classDuration" name="duration_minutes" min="15" value="60" required></div>
-                  <div class="mb-3"><label class="form-label fw-bold" for="classPrice">Giá lớp (VNĐ)</label><input type="number" class="form-control" id="classPrice" name="price" min="0" step="1000" value="0" required></div>
-                  <div class="mb-3"><label class="form-label fw-bold" for="classDescription">Mô tả</label><textarea class="form-control" id="classDescription" name="description" rows="3"></textarea></div>
-                  <button type="submit" class="btn btn-brand w-100">Tạo lớp</button>
-                </form>
-              </div>
-            </div>
-            <div class="col-md-7">
-              <div class="card border-0 shadow-sm rounded-3">
-                <div class="card-header bg-white py-3"><h5 class="fw-bold mb-0 text-dark">Danh sách lớp tập</h5></div>
-                <div class="card-body p-0">
-                  <div class="table-responsive">
-                    <table class="table table-hover align-middle mb-0">
-                      <thead class="table-light"><tr><th>Tên lớp</th><th>Danh mục</th><th>HLV</th><th>Độ khó</th><th>Thời lượng</th><th>Giá</th><th>Hành động</th></tr></thead>
-                      <tbody id="adminClassListRows"><tr><td colspan="7" class="text-center py-4 text-muted">Đang tải...</td></tr></tbody>
-                    </table>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+
 
         <div class="tab-pane fade" id="packages-pane">
           <div class="row g-4">
@@ -420,7 +317,7 @@
         location.href = "index.html";
         return;
       }
-      await Promise.all([loadAdminBookings(), loadAdminPayments(), loadAdminTrainerList()]);
+      await Promise.all([loadAdminTrainerStudents(), loadAdminPayments(), loadAdminTrainerList()]);
       calculateStats();
     }
 

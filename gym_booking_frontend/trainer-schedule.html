@@ -1,0 +1,709 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lịch làm việc HLV</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <link rel="stylesheet" href="assets/css/app.css">
+  <style>
+    .trainer-avatar-sm {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: #fff0eb;
+      color: var(--primary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      font-size: 1.2rem;
+      border: 2px solid var(--primary);
+    }
+    .weekly-day-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .weekly-day-row:last-child {
+      border-bottom: none;
+    }
+    .schedule-day-card {
+      border-radius: var(--radius);
+      background: var(--surface);
+      box-shadow: var(--shadow-sm);
+      padding: 20px;
+      margin-bottom: 16px;
+      transition: all 0.2s ease;
+      border: 1px solid var(--border);
+    }
+    .schedule-day-card:hover {
+      box-shadow: var(--shadow);
+      transform: translateY(-2px);
+    }
+    .busy-slot-item {
+      background: #fff5f5;
+      border-left: 4px solid var(--danger);
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin-top: 10px;
+      border-top: 1px solid rgba(220, 38, 38, 0.05);
+      border-right: 1px solid rgba(220, 38, 38, 0.05);
+      border-bottom: 1px solid rgba(220, 38, 38, 0.05);
+    }
+    .free-day-badge {
+      background: #f0fdf4;
+      border-left: 4px solid var(--success);
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin-top: 10px;
+      color: var(--success);
+      border-top: 1px solid rgba(22, 163, 74, 0.05);
+      border-right: 1px solid rgba(22, 163, 74, 0.05);
+      border-bottom: 1px solid rgba(22, 163, 74, 0.05);
+    }
+  </style>
+</head>
+<body onload="initTrainerSchedulePage()">
+  <nav class="navbar navbar-expand-lg navbar-dark fixed-top">
+    <div class="container">
+      <a class="navbar-brand fw-bold" href="index.html"><img class="brand-logo" src="assets/images/logo.png" alt="">Gym Booking</a>
+      <button class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#nav" aria-label="Mở menu"><span class="navbar-toggler-icon"></span></button>
+      <div id="nav" class="collapse navbar-collapse">
+        <ul class="navbar-nav ms-auto align-items-lg-center">
+          <li class="nav-item"><a class="nav-link" href="classes.html">Lớp tập</a></li>
+          <li class="nav-item"><a class="nav-link" href="trainers.html">HLV</a></li>
+          <li class="nav-item"><a class="nav-link" href="packages.html">Gói tập</a></li>
+          <li class="nav-item"><a class="nav-link" href="pt-packages.html">Gói PT</a></li>
+          <li class="nav-item d-none" data-role="member"><a class="nav-link" href="my-bookings.html">Lịch của tôi</a></li>
+          <li class="nav-item d-none" data-role="member"><a class="nav-link" href="my-pt-packages.html">Gói PT của tôi</a></li>
+          <li class="nav-item d-none" data-role="trainer,admin,member"><a class="nav-link active" href="trainer-schedule.html">Lịch làm việc HLV</a></li>
+          <li class="nav-item d-none" data-role="trainer,admin"><a class="nav-link" href="trainer-dashboard.html">Lịch dạy HLV</a></li>
+          <li class="nav-item d-none" data-role="admin"><a class="nav-link" href="admin-dashboard.html">Quản lý Admin</a></li>
+          <li class="nav-item" data-auth="guest"><a class="nav-link" href="login.html">Đăng nhập</a></li>
+          <li class="nav-item d-none" data-auth="user">
+            <span id="navUserName" class="me-lg-2"></span>
+            <button class="btn btn-outline-light btn-sm ms-lg-2" onclick="logout()">Đăng xuất</button>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </nav>
+
+  <main class="page section bg-light">
+    <div class="container">
+      <div id="messages"></div>
+      <div class="text-center mb-5">
+        <h1 class="page-title text-dark">Lịch làm việc HLV</h1>
+        <p class="page-subtitle mx-auto text-secondary">Xem chi tiết khung giờ trực cố định và lịch biểu làm việc bận/rảnh trong 14 ngày tới của huấn luyện viên.</p>
+      </div>
+
+      <div class="row g-4 mb-4">
+        <div class="col-md-6" id="trainerSelectCol">
+          <div class="card border-0 shadow-sm p-4 h-100" style="border-radius: var(--radius); background: var(--surface);">
+            <label for="trainerSelect" class="form-label text-dark fw-bold mb-2">Chọn Huấn Luyện Viên</label>
+            <select id="trainerSelect" class="form-select border-secondary-subtle py-2" onchange="onTrainerSelectChange()">
+              <option value="">-- Đang tải danh sách HLV --</option>
+            </select>
+          </div>
+        </div>
+        <div class="col-md-6" id="trainerInfoCol" style="display: none;">
+          <div class="card border-0 shadow-sm p-4 h-100" style="border-radius: var(--radius); background: var(--surface);">
+            <div class="d-flex align-items-center gap-3">
+              <div class="trainer-avatar-sm" id="infoTrainerInitials">HLV</div>
+              <div>
+                <h4 class="text-dark fw-bold mb-1" id="infoTrainerName">HLV</h4>
+                <p class="text-muted mb-0 small" id="infoTrainerSpecialty">Chuyên môn: </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="row g-4" id="scheduleDisplayArea" style="display: none;">
+        <div class="col-lg-4 mb-4">
+          <div class="card border-0 shadow-sm p-4" style="border-radius: var(--radius); background: var(--surface);">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+              <h4 class="fw-bold text-dark mb-0 d-flex align-items-center">
+                <i class="bi bi-clock-history me-2 text-brand"></i>Khung giờ làm việc
+              </h4>
+              <button id="btnEditSchedule" class="btn btn-sm btn-outline-brand" style="display: none;" onclick="openEditScheduleModal()">
+                <i class="bi bi-pencil-square me-1"></i>Sửa lịch
+              </button>
+            </div>
+            <div class="weekly-availability-list" id="weeklyAvailabilityList">
+              <!-- Weekly availability generated here -->
+            </div>
+          </div>
+        </div>
+        <div class="col-lg-8">
+          <div class="card border-0 shadow-sm p-4" style="border-radius: var(--radius); background: var(--surface);">
+            <h4 class="fw-bold text-dark mb-4 d-flex align-items-center">
+              <i class="bi bi-calendar3 me-2 text-brand"></i>Lịch bận 14 ngày tới
+            </h4>
+            <div id="dailyScheduleList">
+              <!-- Daily schedules generated here -->
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Modal Chỉnh sửa Lịch trực -->
+  <div class="modal fade" id="editScheduleModal" tabindex="-1" aria-labelledby="editScheduleModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+      <div class="modal-content border-0 shadow-lg" style="border-radius: var(--radius);">
+        <div class="modal-header bg-dark text-white py-3">
+          <h5 class="modal-title fw-bold" id="editScheduleModalLabel"><i class="bi bi-pencil-square me-2 text-warning"></i>Cập nhật lịch trực hàng tuần</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <form id="editScheduleForm" onsubmit="submitWeeklySchedule(event)">
+          <div class="modal-body p-4" style="max-height: 70vh; overflow-y: auto;">
+            <div id="modalMessages" class="mb-3"></div>
+            <p class="text-secondary small mb-4">Cấu hình khung giờ làm việc cố định hàng tuần. Các khung giờ này sẽ được sử dụng để kiểm tra tính khả dụng khi hội viên đặt lịch PT.</p>
+            
+            <div class="table-responsive">
+              <table class="table align-middle">
+                <thead>
+                  <tr class="table-light">
+                    <th>Thứ</th>
+                    <th class="text-center" style="width: 150px;">Trực nhật</th>
+                    <th>Giờ bắt đầu</th>
+                    <th>Giờ kết thúc</th>
+                  </tr>
+                </thead>
+                <tbody id="weeklyFormBody">
+                  <!-- Generated dynamically -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div class="modal-footer bg-light py-3">
+            <button type="button" class="btn btn-secondary px-4" data-bs-dismiss="modal">Đóng</button>
+            <button type="submit" class="btn btn-brand px-4" id="saveScheduleBtn">Lưu thay đổi</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Chi tiết Lịch ngày -->
+  <div class="modal fade" id="dayDetailModal" tabindex="-1" aria-labelledby="dayDetailModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content border-0 shadow-lg" style="border-radius: var(--radius);">
+        <div class="modal-header bg-dark text-white py-3">
+          <h5 class="modal-title fw-bold" id="dayDetailModalLabel"><i class="bi bi-calendar-event-fill me-2 text-brand"></i>Chi tiết lịch trực & bận</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body p-4">
+          <div class="mb-4">
+            <label class="text-secondary small fw-bold text-uppercase d-block mb-1">Ngày làm việc</label>
+            <h4 class="text-brand fw-bold mb-0" id="modalDayDate">--</h4>
+          </div>
+          <div class="mb-4 p-3 bg-light rounded border-start border-4 border-brand">
+            <label class="text-secondary small fw-bold text-uppercase d-block mb-1">Khung giờ trực nhật</label>
+            <strong class="fs-5 text-dark" id="modalDayShift">--</strong>
+          </div>
+          <div>
+            <label class="text-secondary small fw-bold text-uppercase d-block mb-2">Chi tiết lịch bận / đặt hẹn</label>
+            <div id="modalDayBusyList" class="d-flex flex-column gap-2">
+              <!-- Dynamically populated -->
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer bg-light py-3">
+          <button type="button" class="btn btn-secondary px-4" data-bs-dismiss="modal">Đóng</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="assets/js/api.js"></script>
+  <script src="assets/js/app.js"></script>
+  <script>
+    let currentWeeklyAvailability = []; // Global to hold current settings
+
+    function getInitials(name) {
+      if (!name) return "PT";
+      const parts = name.trim().split(" ");
+      if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
+      return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    }
+
+    function parseTimeToMinutes(timeStr) {
+      const [h, m] = timeStr.split(":").map(Number);
+      return h * 60 + m;
+    }
+
+    function formatMinutesToTime(mins) {
+      const h = String(Math.floor(mins / 60)).padStart(2, '0');
+      const m = String(mins % 60).padStart(2, '0');
+      return `${h}:${m}`;
+    }
+
+    function getFreeIntervals(shiftStart, shiftEnd, busySlots) {
+      const shiftStartM = parseTimeToMinutes(shiftStart);
+      const shiftEndM = parseTimeToMinutes(shiftEnd);
+      
+      const parsedBusy = busySlots.map(slot => {
+        const startT = slot.start_time.includes(" ") ? slot.start_time.split(" ")[1].substring(0, 5) : slot.start_time.substring(0, 5);
+        const endT = slot.end_time.includes(" ") ? slot.end_time.split(" ")[1].substring(0, 5) : slot.end_time.substring(0, 5);
+        return {
+          start: parseTimeToMinutes(startT),
+          end: parseTimeToMinutes(endT)
+        };
+      }).map(slot => ({
+        start: Math.max(slot.start, shiftStartM),
+        end: Math.min(slot.end, shiftEndM)
+      })).filter(slot => slot.start < slot.end);
+      
+      parsedBusy.sort((a, b) => a.start - b.start);
+      
+      const mergedBusy = [];
+      parsedBusy.forEach(slot => {
+        if (mergedBusy.length === 0) {
+          mergedBusy.push(slot);
+        } else {
+          const last = mergedBusy[mergedBusy.length - 1];
+          if (slot.start <= last.end) {
+            last.end = Math.max(last.end, slot.end);
+          } else {
+            mergedBusy.push(slot);
+          }
+        }
+      });
+      
+      const freeIntervals = [];
+      let currentStart = shiftStartM;
+      mergedBusy.forEach(slot => {
+        if (slot.start > currentStart) {
+          freeIntervals.push({ start: currentStart, end: slot.start });
+        }
+        currentStart = Math.max(currentStart, slot.end);
+      });
+      if (currentStart < shiftEndM) {
+        freeIntervals.push({ start: currentStart, end: shiftEndM });
+      }
+      
+      return freeIntervals.map(slot => ({
+        start_time: formatMinutesToTime(slot.start),
+        end_time: formatMinutesToTime(slot.end)
+      }));
+    }
+
+    function openDayDetailModal(dateText, shiftText, dailyBusy) {
+      document.getElementById("modalDayDate").textContent = dateText;
+      document.getElementById("modalDayShift").textContent = shiftText === "Nghỉ" ? "Không trực nhật (Nghỉ)" : shiftText;
+      
+      const busyList = document.getElementById("modalDayBusyList");
+      busyList.innerHTML = "";
+      
+      if (shiftText === "Nghỉ") {
+        busyList.innerHTML = `<div class="p-3 text-center text-secondary small bg-light rounded fst-italic">
+          <i class="bi bi-info-circle me-1"></i> Huấn luyện viên nghỉ trực vào ngày này.
+        </div>`;
+      } else {
+        const [shiftStart, shiftEnd] = shiftText.split(" - ");
+        const freeIntervals = getFreeIntervals(shiftStart, shiftEnd, dailyBusy);
+        
+        let htmlContent = "";
+        
+        // Free slots list
+        htmlContent += `<div class="mb-4">
+          <h6 class="fw-bold text-success mb-2"><i class="bi bi-check-circle me-1"></i>Khung giờ còn trống (${freeIntervals.length})</h6>
+          <div class="d-flex flex-wrap gap-2">`;
+        if (freeIntervals.length === 0) {
+          htmlContent += `<span class="text-secondary small fst-italic">Không còn khung giờ nào trống trong ca trực.</span>`;
+        } else {
+          freeIntervals.forEach(fi => {
+            htmlContent += `<span class="badge bg-success-subtle text-success border border-success-subtle px-3 py-2 fs-6 fw-bold">${fi.start_time} - ${fi.end_time}</span>`;
+          });
+        }
+        htmlContent += `</div></div>`;
+        
+        // Busy slots list
+        htmlContent += `<div>
+          <h6 class="fw-bold text-danger mb-2"><i class="bi bi-dash-circle me-1"></i>Lịch bận / Đã đặt (${dailyBusy.length})</h6>
+          <div class="d-flex flex-column gap-2">`;
+        if (dailyBusy.length === 0) {
+          htmlContent += `<span class="text-secondary small fst-italic">Không có lịch bận nào.</span>`;
+        } else {
+          dailyBusy.forEach(slot => {
+            const startT = slot.start_time.includes(" ") ? slot.start_time.split(" ")[1].substring(0, 5) : slot.start_time.substring(0, 5);
+            const endT = slot.end_time.includes(" ") ? slot.end_time.split(" ")[1].substring(0, 5) : slot.end_time.substring(0, 5);
+            
+            let typeLabel = "Đặt lịch";
+            let labelClass = "badge bg-danger-subtle text-danger border border-danger-subtle me-2";
+            if (slot.type === 'pt_booking') {
+              typeLabel = "Lịch PT 1-1";
+              labelClass = "badge bg-info-subtle text-info border border-info-subtle me-2";
+            } else if (slot.type === 'class_schedule') {
+              typeLabel = "Lịch Lớp Tập";
+              labelClass = "badge bg-primary-subtle text-primary border border-primary-subtle me-2";
+            } else if (slot.type === 'trainer_booking') {
+              typeLabel = "Bận Cá Nhân";
+              labelClass = "badge bg-secondary-subtle text-secondary border border-secondary-subtle me-2";
+            }
+            
+            htmlContent += `
+              <div class="p-3 border rounded bg-white shadow-sm d-flex justify-content-between align-items-center">
+                <div>
+                  <span class="${labelClass}">${typeLabel}</span>
+                  <strong class="text-dark">${startT} - ${endT}</strong>
+                </div>
+                <span class="text-secondary small font-monospace">${slot.description || ""}</span>
+              </div>
+            `;
+          });
+        }
+        htmlContent += `</div></div>`;
+        
+        busyList.innerHTML = htmlContent;
+      }
+      
+      const modal = new bootstrap.Modal(document.getElementById("dayDetailModal"));
+      modal.show();
+    }
+
+    async function initTrainerSchedulePage() {
+      const user = localStorage.getItem("gymUser");
+      if (!user) {
+        window.location.href = "login.html";
+        return;
+      }
+      
+      const currentUser = JSON.parse(user);
+      
+      try {
+        const trainers = await apiFetch("/trainers/");
+        const select = document.getElementById("trainerSelect");
+        select.innerHTML = '<option value="">-- Chọn HLV để xem lịch --</option>';
+        
+        trainers.forEach(t => {
+          const option = document.createElement("option");
+          option.value = t.id;
+          option.textContent = `${t.name} (${t.specialty || "Chung"})`;
+          select.appendChild(option);
+        });
+
+        if (currentUser.role === 'trainer') {
+          const selectCol = document.getElementById("trainerSelectCol");
+          if (selectCol) selectCol.style.display = "none";
+          
+          const infoCol = document.getElementById("trainerInfoCol");
+          if (infoCol) {
+            infoCol.classList.remove("col-md-6");
+            infoCol.classList.add("col-12");
+          }
+          
+          // Fetch own schedule directly (defaults to self on backend)
+          const res = await apiFetch("/trainers/schedule/");
+          window.currentUserTrainerId = res.trainer.id;
+          select.value = res.trainer.id;
+          
+          renderScheduleData(res);
+        }
+      } catch (err) {
+        showGlobalMessage("Không thể tải danh sách huấn luyện viên: " + err.message, "danger");
+      }
+    }
+
+    async function onTrainerSelectChange() {
+      const select = document.getElementById("trainerSelect");
+      const trainerId = select.value;
+      const displayArea = document.getElementById("scheduleDisplayArea");
+      const infoCol = document.getElementById("trainerInfoCol");
+      
+      if (!trainerId) {
+        displayArea.style.display = "none";
+        infoCol.style.display = "none";
+        return;
+      }
+
+      try {
+        const res = await apiFetch("/trainers/schedule/?trainer_id=" + trainerId);
+        renderScheduleData(res);
+      } catch (err) {
+        showGlobalMessage("Không thể tải lịch làm việc của HLV: " + err.message, "danger");
+      }
+    }
+
+    function renderScheduleData(res) {
+      const infoCol = document.getElementById("trainerInfoCol");
+      const displayArea = document.getElementById("scheduleDisplayArea");
+
+      document.getElementById("infoTrainerName").textContent = res.trainer.name;
+      document.getElementById("infoTrainerSpecialty").textContent = "Chuyên môn: " + (res.trainer.specialty || "Chưa cập nhật");
+      document.getElementById("infoTrainerInitials").textContent = getInitials(res.trainer.name);
+      infoCol.style.display = "block";
+
+      currentWeeklyAvailability = res.weekly_availability;
+
+      // Toggle Edit Schedule button visibility
+      const btnEdit = document.getElementById("btnEditSchedule");
+      if (btnEdit) {
+        if (window.currentUserTrainerId && String(res.trainer.id) === String(window.currentUserTrainerId)) {
+          btnEdit.style.display = "inline-block";
+        } else {
+          btnEdit.style.display = "none";
+        }
+      }
+
+      const weeklyList = document.getElementById("weeklyAvailabilityList");
+      weeklyList.innerHTML = "";
+      
+      const weekdays = ["Thứ Hai", "Thứ Ba", "Thứ Tư", "Thứ Năm", "Thứ Sáu", "Thứ Bảy", "Chủ Nhật"];
+      
+      for (let i = 0; i < 7; i++) {
+        const matched = res.weekly_availability.find(s => s.weekday === i);
+        const row = document.createElement("div");
+        row.className = "weekly-day-row";
+        
+        const nameSpan = document.createElement("span");
+        nameSpan.className = "text-dark fw-bold";
+        nameSpan.textContent = weekdays[i];
+        
+        const timeSpan = document.createElement("span");
+        if (matched) {
+          timeSpan.className = "badge bg-brand text-white py-2 px-3";
+          timeSpan.textContent = `${matched.start_time} - ${matched.end_time}`;
+        } else {
+          timeSpan.className = "badge bg-light text-secondary border py-2 px-3";
+          timeSpan.textContent = "Không làm việc";
+        }
+        
+        row.appendChild(nameSpan);
+        row.appendChild(timeSpan);
+        weeklyList.appendChild(row);
+      }
+
+      const dailyList = document.getElementById("dailyScheduleList");
+      dailyList.innerHTML = "";
+      
+      const today = new Date();
+      const VietnameseDays = ["Chủ Nhật", "Thứ Hai", "Thứ Ba", "Thứ Tư", "Thứ Năm", "Thứ Sáu", "Thứ Bảy"];
+
+      for (let dayOffset = 0; dayOffset < 14; dayOffset++) {
+        const currentDay = new Date(today);
+        currentDay.setDate(today.getDate() + dayOffset);
+        
+        const year = currentDay.getFullYear();
+        const month = String(currentDay.getMonth() + 1).padStart(2, '0');
+        const date = String(currentDay.getDate()).padStart(2, '0');
+        const compDateStr = `${year}-${month}-${date}`;
+        
+        const jsWeekday = currentDay.getDay(); 
+        const dbWeekday = jsWeekday === 0 ? 6 : jsWeekday - 1;
+        const matchedAvail = res.weekly_availability.find(s => s.weekday === dbWeekday);
+        const worksOnThisDay = !!matchedAvail;
+        
+        const card = document.createElement("div");
+        card.className = "schedule-day-card";
+        card.style.cursor = "pointer";
+        card.style.transition = "all 0.2s ease";
+        
+        card.addEventListener("mouseenter", () => {
+          card.style.transform = "translateY(-3px)";
+          card.style.boxShadow = "0 6px 15px rgba(0,0,0,0.08)";
+        });
+        card.addEventListener("mouseleave", () => {
+          card.style.transform = "translateY(0)";
+          card.style.boxShadow = "none";
+        });
+        
+        if (worksOnThisDay) {
+          card.style.borderLeft = "5px solid var(--primary)";
+        } else {
+          card.style.borderLeft = "5px solid #d1d5db";
+        }
+        
+        const header = document.createElement("div");
+        header.className = "d-flex justify-content-between align-items-center mb-3";
+        
+        const title = document.createElement("h5");
+        title.className = "text-dark mb-0 fw-bold";
+        title.innerHTML = `<span class="text-brand me-1">${VietnameseDays[jsWeekday]}</span> - ${date}/${month}/${year}`;
+        
+        const workBadge = document.createElement("span");
+        if (worksOnThisDay) {
+          workBadge.className = "badge bg-success-subtle text-success py-2 px-3 border border-success-subtle";
+          workBadge.textContent = `Lịch trực: ${matchedAvail.start_time} - ${matchedAvail.end_time}`;
+        } else {
+          workBadge.className = "badge bg-secondary-subtle text-secondary py-2 px-3 border border-secondary-subtle";
+          workBadge.textContent = "Nghỉ";
+        }
+        
+        header.appendChild(title);
+        header.appendChild(workBadge);
+        card.appendChild(header);
+
+        const dailyBusy = res.busy_slots.filter(b => b.date === compDateStr);
+
+        if (!worksOnThisDay) {
+          const noWorkDesc = document.createElement("p");
+          noWorkDesc.className = "text-secondary mb-0 small fst-italic";
+          noWorkDesc.innerHTML = `<i class="bi bi-info-circle me-1"></i> Huấn luyện viên không trực vào ngày này.`;
+          card.appendChild(noWorkDesc);
+        } else {
+          const freeIntervals = getFreeIntervals(matchedAvail.start_time, matchedAvail.end_time, dailyBusy);
+          
+          const detailsContainer = document.createElement("div");
+          detailsContainer.className = "mt-2";
+          
+          // Render Free intervals
+          const freeDiv = document.createElement("div");
+          freeDiv.className = "mb-2 d-flex flex-wrap gap-2 align-items-center";
+          freeDiv.innerHTML = `<span class="text-secondary small fw-bold me-2"><i class="bi bi-check2 text-success me-1"></i>Trống:</span>`;
+          if (freeIntervals.length === 0) {
+            freeDiv.innerHTML += `<span class="text-muted small fst-italic">Hết lịch trống</span>`;
+          } else {
+            freeIntervals.forEach(fi => {
+              freeDiv.innerHTML += `<span class="badge bg-success-subtle text-success border border-success-subtle py-1 px-2">${fi.start_time} - ${fi.end_time}</span>`;
+            });
+          }
+          detailsContainer.appendChild(freeDiv);
+          
+          // Render Busy intervals
+          if (dailyBusy.length > 0) {
+            const busyDiv = document.createElement("div");
+            busyDiv.className = "d-flex flex-wrap gap-2 align-items-center";
+            busyDiv.innerHTML = `<span class="text-secondary small fw-bold me-2"><i class="bi bi-x-circle text-danger me-1"></i>Bận:</span>`;
+            
+            dailyBusy.sort((a, b) => {
+              const aTime = a.start_time.includes(" ") ? a.start_time.split(" ")[1] : a.start_time;
+              const bTime = b.start_time.includes(" ") ? b.start_time.split(" ")[1] : b.start_time;
+              return aTime.localeCompare(bTime);
+            });
+            
+            dailyBusy.forEach(slot => {
+              const startT = slot.start_time.includes(" ") ? slot.start_time.split(" ")[1].substring(0, 5) : slot.start_time.substring(0, 5);
+              const endT = slot.end_time.includes(" ") ? slot.end_time.split(" ")[1].substring(0, 5) : slot.end_time.substring(0, 5);
+              let typeLabel = slot.type === 'pt_booking' ? "PT 1-1" : slot.type === 'class_schedule' ? "Lớp tập" : "Bận riêng";
+              busyDiv.innerHTML += `<span class="badge bg-danger-subtle text-danger border border-danger-subtle py-1 px-2">${startT} - ${endT} (${typeLabel})</span>`;
+            });
+            detailsContainer.appendChild(busyDiv);
+          }
+          
+          card.appendChild(detailsContainer);
+        }
+
+        const dateFormatted = `${VietnameseDays[jsWeekday]} - ${date}/${month}/${year}`;
+        const shiftText = worksOnThisDay && matchedAvail ? `${matchedAvail.start_time} - ${matchedAvail.end_time}` : "Nghỉ";
+        card.onclick = () => {
+          openDayDetailModal(dateFormatted, shiftText, dailyBusy);
+        };
+
+        dailyList.appendChild(card);
+      }
+
+      displayArea.style.display = "flex";
+    }
+
+    function openEditScheduleModal() {
+      const weekdays = ["Thứ Hai", "Thứ Ba", "Thứ Tư", "Thứ Năm", "Thứ Sáu", "Thứ Bảy", "Chủ Nhật"];
+      const tbody = document.getElementById("weeklyFormBody");
+      tbody.innerHTML = "";
+
+      for (let i = 0; i < 7; i++) {
+        const matched = currentWeeklyAvailability.find(s => s.weekday === i);
+        const isAvail = !!matched;
+        const startVal = matched ? matched.start_time : "08:00";
+        const endVal = matched ? matched.end_time : "20:00";
+
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td><strong>${weekdays[i]}</strong></td>
+          <td class="text-center">
+            <input type="checkbox" class="form-check-input day-avail-check" data-weekday="${i}" ${isAvail ? 'checked' : ''} onchange="toggleTimeInputs(${i})">
+          </td>
+          <td>
+            <input type="time" class="form-control day-start-time" id="start_${i}" value="${startVal}" ${isAvail ? '' : 'disabled'}>
+          </td>
+          <td>
+            <input type="time" class="form-control day-end-time" id="end_${i}" value="${endVal}" ${isAvail ? '' : 'disabled'}>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      }
+
+      document.getElementById("modalMessages").innerHTML = "";
+      const modal = new bootstrap.Modal(document.getElementById("editScheduleModal"));
+      modal.show();
+    }
+
+    function toggleTimeInputs(weekday) {
+      const check = document.querySelector(`.day-avail-check[data-weekday="${weekday}"]`);
+      const startInput = document.getElementById(`start_${weekday}`);
+      const endInput = document.getElementById(`end_${weekday}`);
+      
+      startInput.disabled = !check.checked;
+      endInput.disabled = !check.checked;
+    }
+
+    async function submitWeeklySchedule(event) {
+      event.preventDefault();
+      const saveBtn = document.getElementById("saveScheduleBtn");
+      saveBtn.disabled = true;
+      saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span> Đang lưu...';
+
+      const payload = [];
+      for (let i = 0; i < 7; i++) {
+        const check = document.querySelector(`.day-avail-check[data-weekday="${i}"]`);
+        const startInput = document.getElementById(`start_${i}`);
+        const endInput = document.getElementById(`end_${i}`);
+
+        payload.push({
+          weekday: i,
+          is_available: check.checked,
+          start_time: check.checked ? startInput.value : null,
+          end_time: check.checked ? endInput.value : null
+        });
+      }
+
+      try {
+        await apiFetch("/trainers/schedule/", {
+          method: "PUT",
+          body: JSON.stringify(payload)
+        });
+
+        // Close modal
+        const modalEl = document.getElementById("editScheduleModal");
+        const modal = bootstrap.Modal.getInstance(modalEl);
+        if (modal) modal.hide();
+
+        // Refresh schedule list on main page
+        const select = document.getElementById("trainerSelect");
+        if (select && select.value) {
+          await onTrainerSelectChange();
+        } else {
+          const res = await apiFetch("/trainers/schedule/");
+          renderScheduleData(res);
+        }
+        showGlobalMessage("Cập nhật lịch làm việc hàng tuần thành công!", "success");
+      } catch (err) {
+        const modalMsg = document.getElementById("modalMessages");
+        modalMsg.innerHTML = `<div class="alert alert-danger alert-dismissible fade show" role="alert">
+          Lỗi: ${err.message}
+          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>`;
+      } finally {
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = "Lưu thay đổi";
+      }
+    }
+
+    function showGlobalMessage(msg, type) {
+      const container = document.getElementById("messages");
+      container.innerHTML = `<div class="alert alert-${type} alert-dismissible fade show" role="alert">
+        ${msg}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+      </div>`;
+    }
+  </script>
+</body>
+</html>
