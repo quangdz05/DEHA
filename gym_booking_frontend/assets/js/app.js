@@ -2178,6 +2178,7 @@ async function loadScheduleSetupForm() {
       trainers.map(t => `<option value="${t.id}">${t.name} (${t.specialty})</option>`).join("");
 
     await loadAdminScheduleList();
+    await loadAdminUnassignedSchedules();
   } catch (err) {
     console.error("Error loading schedule setup form options", err);
   }
@@ -2300,6 +2301,7 @@ async function deleteAdminSchedule(scheduleId) {
     await apiFetch(`/admin/schedules/${scheduleId}/`, { method: "DELETE" });
     showAlert("Da xoa lich tap.");
     await loadAdminScheduleList();
+    await loadAdminUnassignedSchedules();
   } catch (err) {
     showAlert("Khong xoa duoc lich tap: " + err.message, "danger");
   }
@@ -2336,6 +2338,7 @@ async function submitCreateSchedule(event) {
     showAlert("Tao lich tap moi thanh cong!");
     form.reset();
     await loadAdminScheduleList();
+    await loadAdminUnassignedSchedules();
   } catch (err) {
     if (warningDiv) {
       warningDiv.textContent = "Canh bao trung lich: " + err.message;
@@ -3533,6 +3536,75 @@ async function confirmCancelUserPtPackage() {
     showPackagesListOnly();
   } catch (err) {
     alert("Lỗi khi hủy gói tập: " + err.message);
+  }
+}
+
+// =========================================================================
+// ADMIN UNASSIGNED SCHEDULES & ASSIGNMENT LOGIC
+// =========================================================================
+
+let adminActiveTrainersList = [];
+
+async function loadAdminUnassignedSchedules() {
+  const container = document.getElementById("adminUnassignedScheduleListRows");
+  if (!container) return;
+  
+  try {
+    if (!adminActiveTrainersList.length) {
+      adminActiveTrainersList = await apiFetch("/trainers/");
+    }
+    
+    const schedules = await apiFetch("/schedules/?unassigned=true");
+    if (!schedules.length) {
+      container.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-muted">Không có ca học nào chưa phân công HLV.</td></tr>';
+      return;
+    }
+    
+    container.innerHTML = schedules.map(s => {
+      const dateStr = new Date(s.start_time).toLocaleString("vi-VN");
+      const options = adminActiveTrainersList.map(t => `<option value="${t.id}">${t.name} (${t.specialty})</option>`).join("");
+      
+      return `
+        <tr>
+          <td><strong>${s.gym_class_name}</strong></td>
+          <td>${s.room_name}</td>
+          <td>${dateStr}</td>
+          <td>
+            <select class="form-select form-select-sm" id="assignTrainer-${s.id}">
+              <option value="">-- Chọn HLV --</option>
+              ${options}
+            </select>
+          </td>
+          <td>
+            <button class="btn btn-sm btn-brand fw-bold px-3" onclick="adminAssignTrainer(${s.id})"><i class="bi bi-person-plus"></i> Phân công</button>
+          </td>
+        </tr>
+      `;
+    }).join("");
+  } catch (err) {
+    container.innerHTML = `<tr><td colspan="5" class="text-center text-danger py-4">Lỗi: ${err.message}</td></tr>`;
+  }
+}
+
+async function adminAssignTrainer(scheduleId) {
+  const select = document.getElementById(`assignTrainer-${scheduleId}`);
+  if (!select) return;
+  const trainerId = select.value;
+  if (!trainerId) {
+    alert("Vui lòng chọn một huấn luyện viên để phân công!");
+    return;
+  }
+  
+  try {
+    await apiFetch(`/schedules/${scheduleId}/assign/`, {
+      method: "POST",
+      body: JSON.stringify({ trainer_id: parseInt(trainerId) })
+    });
+    alert("Phân công huấn luyện viên thành công!");
+    await loadAdminScheduleList();
+    await loadAdminUnassignedSchedules();
+  } catch (err) {
+    alert("Lỗi khi phân công: " + err.message);
   }
 }
 

@@ -131,8 +131,6 @@ class Command(BaseCommand):
         data = [
             ("Nguyen Van A", "vana@gym.local", "0901111111", "Yoga", 6, "HLV yoga va stretching."),
             ("Tran Thi B", "thib@gym.local", "0902222222", "Cardio", 5, "HLV cardio va giam mo."),
-            ("Le Van C", "vanc@gym.local", "0903333333", "Boxing", 8, "HLV boxing co kinh nghiem thi dau."),
-            ("Pham Thi D", "thid@gym.local", "0904444444", "Zumba", 4, "HLV zumba va dance fitness."),
             ("Hoang Van E", "vane@gym.local", "0905555555", "Personal Trainer", 10, "HLV ca nhan va strength training."),
         ]
         trainers = {}
@@ -168,10 +166,7 @@ class Command(BaseCommand):
     def _create_classes(self, categories, trainers):
         data = [
             ("Yoga co ban", "Yoga", "Yoga", DifficultyLevel.BEGINNER, 60, "Yoga cho nguoi moi bat dau."),
-            ("Yoga nang cao", "Yoga", "Yoga", DifficultyLevel.ADVANCED, 75, "Yoga nang cao suc ben va kha nang giu thang bang."),
             ("Cardio dot mo", "Cardio", "Cardio", DifficultyLevel.INTERMEDIATE, 45, "Cardio cuong do vua."),
-            ("Boxing co ban", "Boxing", "Boxing", DifficultyLevel.BEGINNER, 60, "Ky thuat boxing nen tang."),
-            ("Zumba nang dong", "Zumba", "Zumba", DifficultyLevel.BEGINNER, 50, "Zumba vui nhon cho moi trinh do."),
             (
                 "Weight Training",
                 "Weight Training",
@@ -202,10 +197,7 @@ class Command(BaseCommand):
         schedule_data = [
             ("Yoga co ban", "Room A", 1, time(18, 0), 20),
             ("Cardio dot mo", "Room B", 1, time(19, 30), 15),
-            ("Boxing co ban", "Room C", 2, time(18, 30), 20),
-            ("Zumba nang dong", "Room A", 3, time(17, 30), 20),
             ("Weight Training", "Room C", 4, time(19, 0), 25),
-            ("Yoga nang cao", "Room B", 5, time(18, 0), 15),
             ("Cardio dot mo", "Room A", 6, time(7, 0), 20),
         ]
         schedules = []
@@ -312,7 +304,6 @@ class Command(BaseCommand):
         data = [
             ("PT Basic 8 Sessions", "Gói tập cá nhân cơ bản 8 buổi.", Decimal("3000000.00"), 30, 8),
             ("PT Standard 12 Sessions", "Gói tập cá nhân tiêu chuẩn 12 buổi.", Decimal("4200000.00"), 30, 12),
-            ("PT VIP 24 Sessions", "Gói tập cá nhân cao cấp 24 buổi.", Decimal("7200000.00"), 45, 24),
         ]
         return {
             name: PTPackage.objects.update_or_create(

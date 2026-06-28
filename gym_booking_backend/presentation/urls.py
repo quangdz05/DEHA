@@ -23,6 +23,7 @@ urlpatterns = [
 
     path("profile/me/", views.ProfileMeAPIView.as_view(), name="profile-me"),
     path("trainers/", views.TrainerListAPIView.as_view(), name="trainer-list"),
+    path("trainers/schedule/", views.TrainerScheduleDetailAPIView.as_view(), name="trainer-schedule-detail-api"),
     path("trainers/<int:trainer_id>/", views.TrainerDetailAPIView.as_view(), name="trainer-detail"),
     path("trainers/<int:trainer_id>/reviews/", views.TrainerReviewsAPIView.as_view(), name="trainer-reviews"),
     path("categories/", views.CategoryListAPIView.as_view(), name="category-list"),
@@ -32,6 +33,7 @@ urlpatterns = [
     path("classes/<int:class_id>/reviews/", views.ClassReviewsAPIView.as_view(), name="class-reviews"),
     path("schedules/", views.ScheduleListAPIView.as_view(), name="schedule-list"),
     path("schedules/<int:schedule_id>/", views.ScheduleDetailAPIView.as_view(), name="schedule-detail"),
+    path("schedules/<int:schedule_id>/assign/", views.ScheduleAssignTrainerAPIView.as_view(), name="schedule-assign-trainer"),
     path("bookings/", views.BookingCreateAPIView.as_view(), name="booking-create"),
     path("bookings/my/", views.MyBookingsAPIView.as_view(), name="booking-my"),
     path("bookings/<int:booking_id>/cancel/", views.BookingCancelAPIView.as_view(), name="booking-cancel"),

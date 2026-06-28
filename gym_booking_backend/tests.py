@@ -495,6 +495,73 @@ class RoleAuthAndDashboardTests(APITestCase):
         response = self.client.post(booking_url, booking_data, format="json")
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
+    def test_schedule_assignment_flow(self):
+        # Create a ClassSchedule with NO trainer assigned (trainer = None)
+        unassigned_schedule = ClassSchedule.objects.create(
+            gym_class=self.gym_class,
+            room=self.room,
+            trainer=None,
+            start_time=timezone.now() + timedelta(days=5),
+            end_time=timezone.now() + timedelta(days=5, hours=1),
+            max_participants=15
+        )
+        ClassSchedule.objects.filter(id=unassigned_schedule.id).update(trainer=None)
+        unassigned_schedule.refresh_from_db()
+
+        # 1. Test listing unassigned schedules
+        url_list = reverse("schedule-list")
+        response = self.client.get(url_list, {"unassigned": "true"})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        # Should contain the unassigned schedule
+        ids = [item["id"] for item in response.data]
+        self.assertIn(unassigned_schedule.id, ids)
+
+        # 2. Test Trainer claiming the schedule
+        self.client.force_authenticate(user=self.trainer_user)
+        url_assign = reverse("schedule-assign-trainer", kwargs={"schedule_id": unassigned_schedule.id})
+        response = self.client.post(url_assign, {}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        unassigned_schedule.refresh_from_db()
+        self.assertEqual(unassigned_schedule.trainer, self.trainer_record)
+
+        # 3. Test Admin assigning a trainer
+        # First reset the schedule to unassigned
+        unassigned_schedule.trainer = None
+        unassigned_schedule.save()
+
+        self.client.force_authenticate(user=self.admin_user)
+        response = self.client.post(url_assign, {"trainer_id": self.other_trainer_record.id}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        unassigned_schedule.refresh_from_db()
+        self.assertEqual(unassigned_schedule.trainer, self.other_trainer_record)
+
+        # 4. Test conflict validation error (e.g. trainer already has class)
+        # Create a schedule for other_trainer_record at same time
+        conflict_schedule = ClassSchedule.objects.create(
+            gym_class=self.other_gym_class,
+            room=self.room,
+            trainer=self.other_trainer_record,
+            start_time=timezone.now() + timedelta(days=10),
+            end_time=timezone.now() + timedelta(days=10, hours=1),
+            max_participants=10
+        )
+        # Create another unassigned schedule at same time
+        other_room = Room.objects.create(name="Studio B", location="Level 1", capacity=15)
+        unassigned_schedule_2 = ClassSchedule.objects.create(
+            gym_class=self.gym_class,
+            room=other_room,
+            trainer=None,
+            start_time=timezone.now() + timedelta(days=10),
+            end_time=timezone.now() + timedelta(days=10, hours=1),
+            max_participants=10
+        )
+        ClassSchedule.objects.filter(id=unassigned_schedule_2.id).update(trainer=None)
+        unassigned_schedule_2.refresh_from_db()
+        url_assign_2 = reverse("schedule-assign-trainer", kwargs={"schedule_id": unassigned_schedule_2.id})
+        # Attempt to assign other_trainer_record to unassigned_schedule_2 (should raise conflict since they teach conflict_schedule)
+        response = self.client.post(url_assign_2, {"trainer_id": self.other_trainer_record.id}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
 
 from gym_booking_backend.infrastructure.models import PTPackage, TrainerSchedule, UserPTPackage, PTBooking
 from gym_booking_backend.application.services import pt_booking_service
@@ -656,6 +723,148 @@ class PTBookingTests(APITestCase):
         # Remaining non-completed active bookings should be cancelled
         self.assertEqual(PTBooking.objects.filter(user_pt_package=user_package, status="confirmed").count(), 0)
 
+    def test_pt_booking_preview_rich_errors(self):
+        from gym_booking_backend.infrastructure.models import PTPackage, TrainerSchedule
+        # Authenticate as member
+        self.client.force_authenticate(user=self.member_user)
+
+        # Clear existing schedules to test NO schedule case
+        TrainerSchedule.objects.filter(trainer=self.trainer_record).delete()
+
+        # Create PT Package
+        pt_package = PTPackage.objects.create(
+            name="Personal Training 10 Sessions",
+            price=500000.00,
+            duration_days=30,
+            total_sessions=10,
+            is_active=True
+        )
+
+        # 1. Preview on weekday with NO trainer schedule
+        # Monday is weekday 0, date 2026-06-29 is a Monday
+        url = reverse("api-pt-booking-preview")
+        response = self.client.get(url, {
+            "package": pt_package.id,
+            "trainer": self.trainer_record.id,
+            "start_date": "2026-06-29",
+            "weekdays": "0,1,2,3,4",
+            "start_time": "14:00",
+            "end_time": "15:00"
+        })
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("detail", response.data)
+        self.assertIn("trainer_schedule", response.data["detail"])
+        self.assertIn("busy_slots", response.data["detail"])
+
+        # 2. Preview with time outside trainer's schedule range
+        # Create TrainerSchedule on Monday from 08:00 to 12:00
+        TrainerSchedule.objects.create(
+            trainer=self.trainer_record,
+            weekday=0,
+            start_time="08:00",
+            end_time="12:00",
+            is_available=True
+        )
+
+        # Request 14:00 - 15:00 (outside 08:00 - 12:00)
+        response = self.client.get(url, {
+            "package": pt_package.id,
+            "trainer": self.trainer_record.id,
+            "start_date": "2026-06-29",
+            "weekdays": "0,1,2,3,4",
+            "start_time": "14:00",
+            "end_time": "15:00"
+        })
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("detail", response.data)
+        self.assertEqual(len(response.data["detail"]["trainer_schedule"]), 1)
+        self.assertEqual(response.data["detail"]["trainer_schedule"][0]["start_time"], "08:00")
+
+    def test_trainer_schedule_detail_view(self):
+        url = reverse("trainer-schedule-detail-api")
+        
+        # 1. Access without authentication (should return 401)
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+        # 2. Authenticate as member and query specific trainer_id
+        self.client.force_authenticate(user=self.member_user)
+        response = self.client.get(url, {"trainer_id": self.trainer_record.id})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["trainer"]["id"], self.trainer_record.id)
+        self.assertIn("weekly_availability", response.data)
+        self.assertIn("busy_slots", response.data)
+
+        # 3. Authenticate as trainer and query without trainer_id (should default to self)
+        self.client.force_authenticate(user=self.trainer_user)
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["trainer"]["id"], self.trainer_record.id)
+
+        # 4. Authenticate as a different trainer and try to query trainer_record.id (should receive 403)
+        other_trainer_user = User.objects.create_user(
+            username="other_pt_trainer_test",
+            password="testpassword",
+            email="other_pt_trainer@test.com"
+        )
+        Profile.objects.create(
+            user=other_trainer_user,
+            full_name="Other Trainer",
+            role=UserRole.TRAINER
+        )
+        Trainer.objects.create(
+            user=other_trainer_user,
+            name="Other Trainer",
+            email="other_pt_trainer@test.com",
+            specialty="Pilates"
+        )
+        self.client.force_authenticate(user=other_trainer_user)
+        response = self.client.get(url, {"trainer_id": self.trainer_record.id})
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_trainer_schedule_update_view(self):
+        url = reverse("trainer-schedule-detail-api")
+        
+        # 1. Test update by non-trainer (member should receive 403)
+        self.client.force_authenticate(user=self.member_user)
+        payload = [
+            {"weekday": 0, "is_available": True, "start_time": "08:00", "end_time": "18:00"}
+        ]
+        response = self.client.put(url, payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+        # 2. Test update with invalid format (should return 400)
+        self.client.force_authenticate(user=self.trainer_user)
+        response = self.client.put(url, {"not_a_list": True}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+        # 3. Test update with invalid time range (start >= end)
+        payload = [
+            {"weekday": 0, "is_available": True, "start_time": "18:00", "end_time": "08:00"}
+        ]
+        response = self.client.put(url, payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+        # 4. Test successful update
+        payload = [
+            {"weekday": 0, "is_available": True, "start_time": "09:00", "end_time": "17:00"},
+            {"weekday": 1, "is_available": False, "start_time": None, "end_time": None}
+        ]
+        response = self.client.put(url, payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        # Verify database persists changes
+        from gym_booking_backend.infrastructure.models import TrainerSchedule
+        sched_mon = TrainerSchedule.objects.get(trainer=self.trainer_record, weekday=0)
+        self.assertTrue(sched_mon.is_available)
+        self.assertEqual(sched_mon.start_time.strftime("%H:%M"), "09:00")
+        self.assertEqual(sched_mon.end_time.strftime("%H:%M"), "17:00")
+
+        sched_tue = TrainerSchedule.objects.get(trainer=self.trainer_record, weekday=1)
+        self.assertFalse(sched_tue.is_available)
+
 
 import pyotp
 from django.core.cache import cache
@@ -752,6 +961,36 @@ class SecurityTests(APITestCase):
         # 3. Verify we can login with new password
         login_res = self.client.post(self.login_url, {"username": "security_user", "password": "newpassword456"}, format="json")
         self.assertEqual(login_res.status_code, status.HTTP_200_OK)
+
+    def test_password_reset_non_existent_email(self):
+        # Request forgot password for non-existent email
+        response = self.client.post(self.forgot_url, {"email": "nonexistent@test.com"}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data["message"], "Địa chỉ email không tồn tại trong hệ thống.")
+        # No email should be sent
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_password_reset_duplicate_emails(self):
+        # Register a second user with the same email as security_user (security@test.com)
+        User.objects.create_user(
+            username="security_user_2",
+            email="security@test.com",
+            password="testpassword123_2"
+        )
+        # Clear outbox
+        mail.outbox = []
+
+        # Request forgot password
+        response = self.client.post(self.forgot_url, {"email": "security@test.com"}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        # Check that 2 emails were sent (one for each user sharing security@test.com)
+        self.assertEqual(len(mail.outbox), 2)
+        
+        # Verify subjects contain the usernames
+        subjects = [email.subject for email in mail.outbox]
+        self.assertIn("[Gym Booking] Yêu cầu khôi phục mật khẩu tài khoản security_user", subjects)
+        self.assertIn("[Gym Booking] Yêu cầu khôi phục mật khẩu tài khoản security_user_2", subjects)
 
     def test_two_factor_auth_loop(self):
         # 1. Perform standard login to get token
@@ -878,6 +1117,7 @@ class MockScheduleRepository(IScheduleRepository):
     def get_schedules_by_date(self, date): return []
     def get_schedules_by_trainer(self, trainer_id): return []
     def get_schedules_with_available_slots(self): return []
+    def get_unassigned_schedules(self): return []
     def has_room_conflict(self, room, start_time, end_time, exclude_id=None): return False
     def has_trainer_conflict(self, trainer, start_time, end_time, exclude_id=None): return False
 

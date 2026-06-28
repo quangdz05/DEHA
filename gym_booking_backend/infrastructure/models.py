@@ -213,7 +213,7 @@ class ClassSchedule(TimestampedModel):
                 raise ValidationError(f"Trainer {trainer.name} is already scheduled during this time range.")
 
     def save(self, *args, **kwargs):
-        if not self.trainer_id and self.gym_class_id:
+        if self._state.adding and not self.trainer_id and self.gym_class_id:
             self.trainer = self.gym_class.trainer
         self.full_clean()
         super().save(*args, **kwargs)

@@ -212,8 +212,53 @@ class ScheduleListAPIView(BaseAPIView):
             date=request.query_params.get("date"),
             trainer_id=request.query_params.get("trainer"),
             available=request.query_params.get("available") == "true",
+            unassigned=request.query_params.get("unassigned") == "true",
         )
         return self.handle_result(result, ClassScheduleSerializer, many=True)
+
+
+class ScheduleAssignTrainerAPIView(BaseAPIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, schedule_id):
+        if not hasattr(request.user, "profile") or request.user.profile.role not in ["trainer", "admin"]:
+            return self.handle_result(Result.failure_result("Permission denied.", status_code=403))
+        
+        from gym_booking_backend.infrastructure.models import Trainer, ClassSchedule
+        from django.core.exceptions import ValidationError
+        
+        schedule = ClassSchedule.objects.filter(id=schedule_id).first()
+        if not schedule:
+            return self.handle_result(Result.failure_result("Lịch tập không tồn tại.", status_code=404))
+        
+        role = request.user.profile.role
+        if role == "trainer":
+            # Trainer can only assign themselves
+            trainer = Trainer.objects.filter(user=request.user).first()
+            if not trainer:
+                return self.handle_result(Result.failure_result("Không tìm thấy hồ sơ huấn luyện viên liên kết với tài khoản này.", status_code=404))
+        else:
+            # Admin can assign any trainer by trainer_id
+            trainer_id = request.data.get("trainer_id")
+            if not trainer_id:
+                schedule.trainer = None
+                schedule.save()
+                return self.handle_result(Result.success_result({"message": "Đã hủy phân công huấn luyện viên cho ca học này."}))
+            
+            trainer = Trainer.objects.filter(id=trainer_id).first()
+            if not trainer:
+                return self.handle_result(Result.failure_result("Không tìm thấy huấn luyện viên được yêu cầu.", status_code=404))
+        
+        schedule.trainer = trainer
+        try:
+            schedule.save()
+        except ValidationError as val_err:
+            msg = ", ".join(val_err.messages) if hasattr(val_err, 'messages') else str(val_err)
+            return self.handle_result(Result.failure_result(msg, status_code=400))
+        except Exception as e:
+            return self.handle_result(Result.failure_result(f"Lỗi hệ thống khi phân công: {str(e)}", status_code=400))
+            
+        return self.handle_result(Result.success_result({"message": f"Đã phân công huấn luyện viên {trainer.name} thành công!"}))
 
 
 class ScheduleDetailAPIView(BaseAPIView):
@@ -222,6 +267,139 @@ class ScheduleDetailAPIView(BaseAPIView):
     def get(self, request, schedule_id):
         result = schedule_service.get_schedule(schedule_id)
         return self.handle_result(result, ClassScheduleSerializer)
+
+
+class TrainerScheduleDetailAPIView(BaseAPIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from gym_booking_backend.infrastructure.models import Trainer, TrainerSchedule
+        from datetime import timedelta
+        from django.utils import timezone
+        from gym_booking_backend.application.services.pt_booking_service import get_trainer_busy_slots
+        from gym_booking_backend.domain.constants import WeekdayChoices
+
+        # Enforce trainer restriction: trainers can only view their own schedule
+        if hasattr(request.user, "profile") and request.user.profile.role == "trainer":
+            logged_in_trainer = Trainer.objects.filter(user=request.user).first()
+            if not logged_in_trainer:
+                return self.handle_result(Result.failure_result("Không tìm thấy hồ sơ huấn luyện viên liên kết.", status_code=404))
+            
+            trainer_id = request.query_params.get("trainer_id")
+            if trainer_id:
+                try:
+                    tid_int = int(trainer_id)
+                except ValueError:
+                    return self.handle_result(Result.failure_result("Mã huấn luyện viên không hợp lệ.", status_code=400))
+                if tid_int != logged_in_trainer.id:
+                    return self.handle_result(Result.failure_result("Huấn luyện viên chỉ có quyền xem lịch của chính mình.", status_code=403))
+            
+            trainer = logged_in_trainer
+        else:
+            trainer_id = request.query_params.get("trainer_id")
+            if trainer_id:
+                try:
+                    trainer = Trainer.objects.filter(id=int(trainer_id)).first()
+                except ValueError:
+                    return self.handle_result(Result.failure_result("Mã huấn luyện viên không hợp lệ.", status_code=400))
+                if not trainer:
+                    return self.handle_result(Result.failure_result("Không tìm thấy huấn luyện viên.", status_code=404))
+            else:
+                # Default to the logged-in trainer
+                trainer = Trainer.objects.filter(user=request.user).first()
+                if not trainer:
+                    return self.handle_result(Result.failure_result("Vui lòng chọn huấn luyện viên.", status_code=400))
+
+        # Get weekly availability
+        schedules = TrainerSchedule.objects.filter(trainer=trainer, is_available=True)
+        schedule_data = [
+            {
+                "weekday": s.weekday,
+                "weekday_name": dict(WeekdayChoices.choices).get(s.weekday, str(s.weekday)),
+                "start_time": s.start_time.strftime("%H:%M") if s.start_time else "",
+                "end_time": s.end_time.strftime("%H:%M") if s.end_time else ""
+            }
+            for s in schedules
+        ]
+
+        # Get busy slots for the next 14 days
+        start_date = timezone.now().date()
+        end_date = start_date + timedelta(days=14)
+        busy_slots = get_trainer_busy_slots(trainer, start_date, end_date)
+
+        return self.handle_result(Result.success_result({
+            "trainer": {
+                "id": trainer.id,
+                "name": trainer.name,
+                "specialty": trainer.specialty
+            },
+            "weekly_availability": schedule_data,
+            "busy_slots": busy_slots
+        }))
+
+    def put(self, request):
+        if not hasattr(request.user, "profile") or request.user.profile.role != "trainer":
+            return self.handle_result(Result.failure_result("Chỉ huấn luyện viên mới có quyền cập nhật lịch làm việc.", status_code=403))
+
+        from gym_booking_backend.infrastructure.models import Trainer, TrainerSchedule
+        from datetime import datetime, time
+
+        trainer = Trainer.objects.filter(user=request.user).first()
+        if not trainer:
+            return self.handle_result(Result.failure_result("Không tìm thấy hồ sơ huấn luyện viên liên kết.", status_code=404))
+
+        schedules_data = request.data
+        if not isinstance(schedules_data, list):
+            return self.handle_result(Result.failure_result("Dữ liệu gửi lên phải là một danh sách các ngày.", status_code=400))
+
+        validated_items = []
+        for idx, item in enumerate(schedules_data):
+            weekday = item.get("weekday")
+            if weekday is None or not (0 <= int(weekday) <= 6):
+                return self.handle_result(Result.failure_result(f"Thứ tự ngày không hợp lệ ở vị trí {idx}.", status_code=400))
+            
+            is_available = item.get("is_available", False)
+            start_time_str = item.get("start_time")
+            end_time_str = item.get("end_time")
+
+            start_time = time(9, 0)
+            end_time = time(17, 0)
+
+            if is_available:
+                if not start_time_str or not end_time_str:
+                    return self.handle_result(Result.failure_result(f"Vui lòng cung cấp giờ bắt đầu và kết thúc cho ngày khả dụng ở vị trí {idx}.", status_code=400))
+                try:
+                    start_time = datetime.strptime(start_time_str, "%H:%M").time()
+                    end_time = datetime.strptime(end_time_str, "%H:%M").time()
+                except ValueError:
+                    try:
+                        start_time = datetime.strptime(start_time_str, "%H:%M:%S").time()
+                        end_time = datetime.strptime(end_time_str, "%H:%M:%S").time()
+                    except ValueError:
+                        return self.handle_result(Result.failure_result(f"Giờ không đúng định dạng HH:MM ở vị trí {idx}.", status_code=400))
+
+                if start_time >= end_time:
+                    return self.handle_result(Result.failure_result(f"Giờ bắt đầu phải trước giờ kết thúc ở vị trí {idx}.", status_code=400))
+
+            validated_items.append({
+                "weekday": int(weekday),
+                "is_available": bool(is_available),
+                "start_time": start_time,
+                "end_time": end_time
+            })
+
+        for item in validated_items:
+            TrainerSchedule.objects.update_or_create(
+                trainer=trainer,
+                weekday=item["weekday"],
+                defaults={
+                    "is_available": item["is_available"],
+                    "start_time": item["start_time"],
+                    "end_time": item["end_time"]
+                }
+            )
+
+        return self.handle_result(Result.success_result({"message": "Cập nhật lịch làm việc hàng tuần thành công!"}))
 
 
 class BookingCreateAPIView(BaseAPIView):

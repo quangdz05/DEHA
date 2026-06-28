@@ -4,7 +4,7 @@ from gym_booking_backend.domain.result import Result
 
 class IScheduleService(ABC):
     @abstractmethod
-    def get_schedules(self, date=None, trainer_id=None, available=False) -> Result:
+    def get_schedules(self, date=None, trainer_id=None, available=False, unassigned=False) -> Result:
         pass
 
     @abstractmethod

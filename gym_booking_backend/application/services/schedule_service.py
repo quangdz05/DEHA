@@ -7,7 +7,7 @@ from gym_booking_backend.domain.result import Result
 
 
 class ScheduleService(IScheduleService):
-    def get_schedules(self, date=None, trainer_id=None, available=False) -> Result:
+    def get_schedules(self, date=None, trainer_id=None, available=False, unassigned=False) -> Result:
         try:
             if date:
                 try:
@@ -19,6 +19,8 @@ class ScheduleService(IScheduleService):
                 schedules = schedule_repository.get_schedules_by_trainer(trainer_id)
             elif available:
                 schedules = schedule_repository.get_schedules_with_available_slots()
+            elif unassigned:
+                schedules = schedule_repository.get_unassigned_schedules()
             else:
                 schedules = schedule_repository.get_all_schedules()
             return Result.success_result(schedules, status_code=200)

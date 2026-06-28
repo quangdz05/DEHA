@@ -33,3 +33,7 @@ class IScheduleRepository(ABC):
     @abstractmethod
     def has_trainer_conflict(self, trainer, start_time, end_time, exclude_id=None):
         pass
+
+    @abstractmethod
+    def get_unassigned_schedules(self):
+        pass

@@ -70,7 +70,10 @@ class MonthlyPTBookingCreateAPIView(BaseAPIView):
         )
 
         if not result.success:
-            return Response({"message": result.message}, status=result.status_code)
+            resp_data = {"message": result.message}
+            if result.data is not None:
+                resp_data["detail"] = result.data
+            return Response(resp_data, status=result.status_code)
 
         serialized_package = UserPTPackageSerializer(result.data["package"]).data
         return Response({
@@ -160,7 +163,10 @@ class PTBookingPreviewAPIView(BaseAPIView):
             )
 
             if not result.success:
-                return Response({"message": result.message}, status=result.status_code)
+                resp_data = {"message": result.message}
+                if result.data is not None:
+                    resp_data["detail"] = result.data
+                return Response(resp_data, status=result.status_code)
 
             data = []
             for p in result.data:

@@ -89,5 +89,11 @@ class DjangoScheduleRepository(IScheduleRepository):
         ).exists()
         return pt_overlap
 
+    def get_unassigned_schedules(self):
+        return ClassSchedule.objects.select_related("gym_class", "trainer", "room").filter(
+            trainer__isnull=True,
+            start_time__gt=timezone.now()
+        )
+
 
 schedule_repository = DjangoScheduleRepository()

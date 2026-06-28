@@ -20,36 +20,44 @@ class ForgotPasswordAPIView(BaseAPIView):
         if not email:
             return self.handle_result(Result.failure_result("Vui lòng nhập địa chỉ email.", status_code=400))
 
-        user = User.objects.filter(email=email).first()
-        # To avoid email enumeration, we return success even if the email does not exist
-        msg = "Nếu email tồn tại trong hệ thống, bạn sẽ nhận được đường dẫn khôi phục mật khẩu."
+        users = User.objects.filter(email=email)
+        if not users.exists():
+            return self.handle_result(Result.failure_result("Địa chỉ email không tồn tại trong hệ thống.", status_code=400))
 
-        if user:
+        # Dynamically determine the frontend domain/port from Referer
+        referer = request.META.get("HTTP_REFERER")
+        if referer:
+            parsed = urlparse(referer)
+            frontend_base = f"{parsed.scheme}://{parsed.netloc}"
+        else:
+            frontend_base = "http://localhost:5500"
+
+        from gym_booking_backend.application.services.email_service import send_dynamic_recovery_email
+        
+        any_success = False
+        last_error = None
+
+        for user in users:
             token = default_token_generator.make_token(user)
             uid = urlsafe_base64_encode(force_bytes(user.pk))
-            
-            # Dynamically determine the frontend domain/port from Referer
-            referer = request.META.get("HTTP_REFERER")
-            if referer:
-                parsed = urlparse(referer)
-                frontend_base = f"{parsed.scheme}://{parsed.netloc}"
-            else:
-                frontend_base = "http://localhost:5500"
-
             reset_link = f"{frontend_base}/reset-password.html?uid={uid}&token={token}"
-
-            from gym_booking_backend.application.services.email_service import send_dynamic_recovery_email
+            
             try:
-                success = send_dynamic_recovery_email(email, reset_link)
-                if not success:
-                    return self.handle_result(Result.failure_result("Lỗi hệ thống khi gửi email khôi phục.", status_code=500))
+                success = send_dynamic_recovery_email(email, reset_link, username=user.username)
+                if success:
+                    any_success = True
+                else:
+                    last_error = "Lỗi hệ thống khi gửi email khôi phục."
             except ValueError as val_err:
-                return self.handle_result(Result.failure_result(str(val_err), status_code=400))
+                last_error = str(val_err)
             except Exception as e:
-                print("Failed to send email:", e)
-                return self.handle_result(Result.failure_result("Lỗi hệ thống khi gửi email khôi phục.", status_code=500))
+                print(f"Failed to send email for user {user.username}:", e)
+                last_error = "Lỗi hệ thống khi gửi email khôi phục."
 
-        return self.handle_result(Result.success_result({"message": msg}, status_code=200))
+        if not any_success:
+            return self.handle_result(Result.failure_result(last_error or "Lỗi hệ thống khi gửi email khôi phục.", status_code=500))
+
+        return self.handle_result(Result.success_result({"message": "Liên kết khôi phục mật khẩu đã được gửi đến email của bạn."}, status_code=200))
 
 
 class ResetPasswordAPIView(BaseAPIView):

@@ -176,6 +176,31 @@
                   </div>
                 </div>
               </div>
+
+              <div class="card border-0 shadow-sm rounded-3 mt-4">
+                <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                  <h5 class="fw-bold mb-0 text-dark"><i class="bi bi-exclamation-triangle text-danger me-2"></i>Lịch chưa phân công HLV</h5>
+                  <button class="btn btn-sm btn-outline-secondary" onclick="loadAdminUnassignedSchedules()"><i class="bi bi-arrow-clockwise"></i> Làm mới</button>
+                </div>
+                <div class="card-body p-0">
+                  <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                      <thead class="table-light">
+                        <tr>
+                          <th>Lớp học</th>
+                          <th>Phòng</th>
+                          <th>Thời gian</th>
+                          <th>Phân công HLV</th>
+                          <th>Thao tác</th>
+                        </tr>
+                      </thead>
+                      <tbody id="adminUnassignedScheduleListRows">
+                        <tr><td colspan="5" class="text-center py-4 text-muted">Đang tải...</td></tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>

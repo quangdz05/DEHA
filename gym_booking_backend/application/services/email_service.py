@@ -9,12 +9,13 @@ from gym_booking_backend.infrastructure.models import EmailSetting
 logger = logging.getLogger(__name__)
 
 
-def send_dynamic_recovery_email(user_email: str, reset_link: str) -> bool:
+def send_dynamic_recovery_email(user_email: str, reset_link: str, username: str = None) -> bool:
     """
     Khởi tạo kết nối SMTP động từ Cơ sở dữ liệu và gửi email khôi phục mật khẩu.
     
     :param user_email: Địa chỉ nhận thư
     :param reset_link: Đường dẫn khôi phục mật khẩu dạng mã hóa dùng một lần
+    :param username: Tên đăng nhập của tài khoản cần khôi phục mật khẩu
     :return: True nếu gửi thành công, False nếu thất bại
     """
     # 1. Đọc tài khoản email SMTP đang được kích hoạt từ database
@@ -46,14 +47,16 @@ def send_dynamic_recovery_email(user_email: str, reset_link: str) -> bool:
         # 3. Kết xuất giao diện email bằng HTML Template và truyền tham số
         context = {
             'reset_link': reset_link,
-            'email_user': user_email
+            'email_user': user_email,
+            'username': username
         }
         html_content = render_to_string('pt/reset_password_email.html', context)
         
         # Tạo body thuần văn bản (plain text) sạch đẹp và tương thích tốt nhất
+        user_info = f" cho tài khoản '{username}'" if username else ""
         text_content = (
             f"Chào bạn,\n\n"
-            f"Chúng tôi đã nhận được yêu cầu khôi phục mật khẩu cho tài khoản Gym Booking được đăng ký với email này ({user_email}).\n\n"
+            f"Chúng tôi đã nhận được yêu cầu khôi phục mật khẩu{user_info} được đăng ký với email này ({user_email}).\n\n"
             f"Vui lòng nhấn vào liên kết dưới đây để đặt lại mật khẩu của bạn:\n"
             f"{reset_link}\n\n"
             f"Lưu ý: Liên kết này chỉ có hiệu lực sử dụng một lần và sẽ tự động hết hạn.\n\n"
@@ -63,7 +66,7 @@ def send_dynamic_recovery_email(user_email: str, reset_link: str) -> bool:
         )
 
         # 4. Thiết lập nội dung thư khôi phục
-        subject = "[Gym Booking] Yêu cầu khôi phục mật khẩu tài khoản"
+        subject = f"[Gym Booking] Yêu cầu khôi phục mật khẩu tài khoản {username}" if username else "[Gym Booking] Yêu cầu khôi phục mật khẩu tài khoản"
         
         email = EmailMultiAlternatives(
             subject=subject,

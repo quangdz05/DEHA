@@ -29,6 +29,67 @@ def get_session_dates(start_date, selected_weekdays, total_sessions, duration_da
     return session_dates
 
 
+def get_trainer_busy_slots(trainer, start_date, end_date):
+    from gym_booking_backend.infrastructure.models import PTBooking, TrainerBooking, ClassSchedule
+    
+    ACTIVE_PT_STATUSES = ["pending", "confirmed"]
+    ACTIVE_BOOKING_STATUSES = ["pending", "confirmed"]
+    
+    busy = []
+    
+    # 1. PTBooking
+    pt_bookings = PTBooking.objects.filter(
+        trainer=trainer,
+        booking_date__range=[start_date, end_date],
+        status__in=ACTIVE_PT_STATUSES
+    ).order_by('booking_date', 'start_time')
+    for b in pt_bookings:
+        busy.append({
+            "type": "pt_booking",
+            "date": b.booking_date.strftime("%Y-%m-%d"),
+            "start_time": b.start_time.strftime("%H:%M"),
+            "end_time": b.end_time.strftime("%H:%M"),
+            "description": f"Personal Training Booking ({b.start_time.strftime('%H:%M')} - {b.end_time.strftime('%H:%M')})"
+        })
+        
+    # 2. TrainerBooking
+    trainer_bookings = TrainerBooking.objects.filter(
+        trainer=trainer,
+        start_time__date__range=[start_date, end_date],
+        status__in=ACTIVE_BOOKING_STATUSES
+    ).order_by('start_time')
+    for b in trainer_bookings:
+        start_dt = b.start_time
+        end_dt = b.end_time
+        busy.append({
+            "type": "trainer_booking",
+            "date": start_dt.date().strftime("%Y-%m-%d"),
+            "start_time": start_dt.time().strftime("%H:%M"),
+            "end_time": end_dt.time().strftime("%H:%M"),
+            "description": f"Trainer Booking ({start_dt.time().strftime('%H:%M')} - {end_dt.time().strftime('%H:%M')})"
+        })
+        
+    # 3. ClassSchedule
+    class_schedules = ClassSchedule.objects.filter(
+        trainer=trainer,
+        start_time__date__range=[start_date, end_date],
+        status__in=["open", "full"]
+    ).order_by('start_time')
+    for cs in class_schedules:
+        start_dt = cs.start_time
+        end_dt = cs.end_time
+        busy.append({
+            "type": "class_schedule",
+            "date": start_dt.date().strftime("%Y-%m-%d"),
+            "start_time": start_dt.time().strftime("%H:%M"),
+            "end_time": end_dt.time().strftime("%H:%M"),
+            "description": f"Class Schedule: {cs.gym_class.name} ({start_dt.time().strftime('%H:%M')} - {end_dt.time().strftime('%H:%M')})"
+        })
+        
+    busy.sort(key=lambda x: (x["date"], x["start_time"]))
+    return busy
+
+
 class PTBookingService(IPTBookingService):
     def preview_monthly_pt_bookings(self, user, package_id, trainer_id, start_date, selected_weekdays, start_time, end_time) -> Result:
         try:
@@ -79,12 +140,49 @@ class PTBookingService(IPTBookingService):
                 sched = pt_repository.get_trainer_schedule_for_weekday(trainer, wd)
                 if not sched:
                     weekday_label = dict(WeekdayChoices.choices).get(wd, str(wd))
-                    return Result.failure_result(f"Trainer {trainer.name} is not available on {weekday_label}.", status_code=400)
+                    avail_schedules = pt_repository.get_trainer_schedules(trainer)
+                    schedule_details = [
+                        {
+                            "weekday": dict(WeekdayChoices.choices).get(s.weekday, str(s.weekday)),
+                            "weekday_code": s.weekday,
+                            "start_time": s.start_time.strftime("%H:%M") if s.start_time else "",
+                            "end_time": s.end_time.strftime("%H:%M") if s.end_time else "",
+                        }
+                        for s in avail_schedules
+                    ]
+                    busy_slots = get_trainer_busy_slots(trainer, start_date, start_date + timedelta(days=package.duration_days))
+                    return Result(
+                        success=False,
+                        message=f"Trainer {trainer.name} is not available on {weekday_label}.",
+                        data={
+                            "trainer_schedule": schedule_details,
+                            "busy_slots": busy_slots
+                        },
+                        status_code=400
+                    )
 
                 if start_time < sched.start_time or end_time > sched.end_time:
-                    return Result.failure_result(
-                        f"Requested time {start_time:%H:%M} - {end_time:%H:%M} is outside trainer's working hours "
-                        f"({sched.start_time:%H:%M} - {sched.end_time:%H:%M}) on {dict(WeekdayChoices.choices).get(wd)}.",
+                    avail_schedules = pt_repository.get_trainer_schedules(trainer)
+                    schedule_details = [
+                        {
+                            "weekday": dict(WeekdayChoices.choices).get(s.weekday, str(s.weekday)),
+                            "weekday_code": s.weekday,
+                            "start_time": s.start_time.strftime("%H:%M") if s.start_time else "",
+                            "end_time": s.end_time.strftime("%H:%M") if s.end_time else "",
+                        }
+                        for s in avail_schedules
+                    ]
+                    busy_slots = get_trainer_busy_slots(trainer, start_date, start_date + timedelta(days=package.duration_days))
+                    return Result(
+                        success=False,
+                        message=(
+                            f"Requested time {start_time:%H:%M} - {end_time:%H:%M} is outside trainer's working hours "
+                            f"({sched.start_time:%H:%M} - {sched.end_time:%H:%M}) on {dict(WeekdayChoices.choices).get(wd)}."
+                        ),
+                        data={
+                            "trainer_schedule": schedule_details,
+                            "busy_slots": busy_slots
+                        },
                         status_code=400
                     )
 
@@ -131,6 +229,9 @@ class PTBookingService(IPTBookingService):
                 return preview_res
 
             previews = preview_res.data
+            package = pt_repository.get_pt_package_by_id(package_id)
+            trainer = trainer_repository.get_trainer_by_id(trainer_id)
+
             conflicts = []
             for preview in previews:
                 if not preview["is_valid"]:
@@ -142,10 +243,26 @@ class PTBookingService(IPTBookingService):
                     conflicts.append(err)
 
             if conflicts:
-                return Result.failure_result("Schedule conflict detected: " + "; ".join(conflicts), status_code=400)
-
-            package = pt_repository.get_pt_package_by_id(package_id)
-            trainer = trainer_repository.get_trainer_by_id(trainer_id)
+                avail_schedules = pt_repository.get_trainer_schedules(trainer)
+                schedule_details = [
+                    {
+                        "weekday": dict(WeekdayChoices.choices).get(s.weekday, str(s.weekday)),
+                        "weekday_code": s.weekday,
+                        "start_time": s.start_time.strftime("%H:%M") if s.start_time else "",
+                        "end_time": s.end_time.strftime("%H:%M") if s.end_time else "",
+                    }
+                    for s in avail_schedules
+                ]
+                busy_slots = get_trainer_busy_slots(trainer, start_date, start_date + timedelta(days=package.duration_days))
+                return Result(
+                    success=False,
+                    message="Schedule conflict detected: " + "; ".join(conflicts),
+                    data={
+                        "trainer_schedule": schedule_details,
+                        "busy_slots": busy_slots
+                    },
+                    status_code=400
+                )
 
             weekdays_list = selected_weekdays_list
 
