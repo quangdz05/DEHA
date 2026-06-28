@@ -126,134 +126,7 @@ class Room(SoftDeleteModel):
         return self.name
 
 
-# VĐ #12: Category kế thừa SoftDeleteModel
-class Category(SoftDeleteModel):
-    name = models.CharField(max_length=100, unique=True)
-    description = models.TextField(blank=True)
-    image = models.ImageField(upload_to="categories/", null=True, blank=True)
-    status = models.CharField(max_length=20, choices=CommonStatus.choices, default=CommonStatus.ACTIVE)
 
-    class Meta:
-        ordering = ["name", "id"]
-        verbose_name_plural = "Categories"
-
-    def __str__(self):
-        return self.name
-
-
-# VĐ #12: GymClass kế thừa SoftDeleteModel
-class GymClass(SoftDeleteModel):
-    category = models.ForeignKey(Category, on_delete=models.PROTECT, related_name="classes")
-    trainer = models.ForeignKey(Trainer, on_delete=models.PROTECT, related_name="classes")
-    name = models.CharField(max_length=150)
-    description = models.TextField(blank=True)
-    difficulty_level = models.CharField(
-        max_length=20,
-        choices=DifficultyLevel.choices,
-        default=DifficultyLevel.BEGINNER,
-    )
-    duration_minutes = models.PositiveIntegerField()
-    price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    image = models.ImageField(upload_to="classes/", null=True, blank=True)
-    status = models.CharField(max_length=20, choices=CommonStatus.choices, default=CommonStatus.ACTIVE)
-
-    class Meta:
-        ordering = ["name", "id"]
-
-    def __str__(self):
-        return self.name
-
-
-class ClassSchedule(TimestampedModel):
-    gym_class = models.ForeignKey(GymClass, on_delete=models.CASCADE, related_name="schedules")
-    room = models.ForeignKey(Room, on_delete=models.PROTECT, related_name="schedules")
-    trainer = models.ForeignKey(Trainer, on_delete=models.PROTECT, related_name="schedules", null=True, blank=True)
-    start_time = models.DateTimeField()
-    end_time = models.DateTimeField()
-    max_participants = models.PositiveIntegerField()
-    current_participants = models.PositiveIntegerField(default=0)
-    status = models.CharField(max_length=20, choices=ScheduleStatus.choices, default=ScheduleStatus.OPEN)
-
-    class Meta:
-        ordering = ["start_time", "id"]
-        # VĐ #5: Database indexes
-        indexes = [
-            models.Index(fields=["start_time", "status"], name="idx_schedule_start_status"),
-        ]
-        # VĐ #6: CHECK constraints
-        constraints = [
-            models.CheckConstraint(
-                condition=models.Q(start_time__lt=models.F("end_time")),
-                name="check_schedule_start_before_end",
-            ),
-            models.CheckConstraint(
-                condition=models.Q(current_participants__lte=models.F("max_participants")),
-                name="check_participants_not_exceeding",
-            ),
-        ]
-
-    def __str__(self):
-        return f"{self.gym_class.name} - {self.start_time:%Y-%m-%d %H:%M}"
-
-    def clean(self):
-        from django.core.exceptions import ValidationError
-        from gym_booking_backend.infrastructure.repositories import schedule_repository
-
-        if self.start_time and self.end_time:
-            if self.start_time >= self.end_time:
-                raise ValidationError("Start time must be before end time.")
-
-            # Check room conflict
-            if schedule_repository.has_room_conflict(self.room, self.start_time, self.end_time, self.id):
-                raise ValidationError(f"Room {self.room.name} is already booked during this time range.")
-
-            # Check trainer conflict
-            trainer = self.trainer or (self.gym_class.trainer if self.gym_class_id else None)
-            if trainer and schedule_repository.has_trainer_conflict(trainer, self.start_time, self.end_time, self.id):
-                raise ValidationError(f"Trainer {trainer.name} is already scheduled during this time range.")
-
-    def save(self, *args, **kwargs):
-        if self._state.adding and not self.trainer_id and self.gym_class_id:
-            self.trainer = self.gym_class.trainer
-        self.full_clean()
-        super().save(*args, **kwargs)
-
-    @property
-    def available_slots(self):
-        return max(self.max_participants - self.current_participants, 0)
-
-
-# VĐ #3: Booking kế thừa TimestampedModel, booked_at thành property alias
-class Booking(TimestampedModel):
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="bookings")
-    schedule = models.ForeignKey(ClassSchedule, on_delete=models.CASCADE, related_name="bookings")
-    booking_code = models.CharField(max_length=30, unique=True)
-    status = models.CharField(max_length=20, choices=BookingStatus.choices, default=BookingStatus.PENDING)
-    note = models.TextField(blank=True)
-    cancellation_reason = models.TextField(blank=True)
-    cancelled_at = models.DateTimeField(null=True, blank=True)
-
-    @property
-    def booked_at(self):
-        return self.created_at
-
-    class Meta:
-        ordering = ["-created_at", "id"]
-        # VĐ #5: Database indexes
-        indexes = [
-            models.Index(fields=["status"], name="idx_booking_status"),
-            models.Index(fields=["user", "status"], name="idx_booking_user_status"),
-        ]
-        constraints = [
-            models.UniqueConstraint(
-                fields=["user", "schedule"],
-                condition=models.Q(status__in=["pending", "confirmed"]),
-                name="unique_active_booking",
-            )
-        ]
-
-    def __str__(self):
-        return self.booking_code
 
 
 # VĐ #3 + #10: TrainerBooking kế thừa TimestampedModel, trainer FK → PROTECT
@@ -345,7 +218,6 @@ class MembershipPackage(SoftDeleteModel):
     max_bookings_per_week = models.PositiveIntegerField(null=True, blank=True)
     is_freezable = models.BooleanField(default=True)
     max_freeze_days = models.PositiveIntegerField(default=30)
-    allowed_categories = models.ManyToManyField(Category, blank=True, related_name="membership_packages")
     status = models.CharField(max_length=20, choices=CommonStatus.choices, default=CommonStatus.ACTIVE)
 
     class Meta:
@@ -464,12 +336,10 @@ class Payment(TimestampedModel):
         return self.transaction_code or f"Payment #{self.pk}"
 
 
-# VĐ #8: Review phải có ít nhất 1 target (trainer hoặc gym_class)
+# VĐ #8: Review dành cho huấn luyện viên (PT)
 class Review(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="reviews")
-    trainer = models.ForeignKey(Trainer, on_delete=models.CASCADE, related_name="reviews", null=True, blank=True)
-    gym_class = models.ForeignKey(GymClass, on_delete=models.CASCADE, related_name="reviews", null=True, blank=True)
-    booking = models.ForeignKey(Booking, on_delete=models.SET_NULL, null=True, blank=True, related_name="reviews")
+    trainer = models.ForeignKey(Trainer, on_delete=models.CASCADE, null=True, blank=True, related_name="reviews")
     rating = models.PositiveSmallIntegerField(choices=RatingChoices.choices, validators=[MinValueValidator(1), MaxValueValidator(5)])
     comment = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -486,19 +356,10 @@ class Review(models.Model):
                 condition=models.Q(rating__gte=1, rating__lte=5),
                 name="check_rating_range",
             ),
-            # VĐ #8: Ít nhất 1 target phải được chỉ định
-            models.CheckConstraint(
-                condition=(
-                    models.Q(trainer__isnull=False) |
-                    models.Q(gym_class__isnull=False)
-                ),
-                name="review_must_have_target",
-            ),
         ]
 
     def __str__(self):
-        target = self.trainer or self.gym_class
-        return f"{self.user.username} - {target} ({self.rating})"
+        return f"{self.user.username} - {self.trainer} ({self.rating})"
 
 
 # VĐ #12: PTPackage kế thừa SoftDeleteModel

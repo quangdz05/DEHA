@@ -7,8 +7,6 @@ from gym_booking_backend.infrastructure.models import (
     UserPTPackage,
     PTBooking,
     TrainerBooking,
-    Booking,
-    ClassSchedule,
 )
 from gym_booking_backend.application.interfaces.repositories.ipt_repository import IPTRepository
 
@@ -64,14 +62,8 @@ class DjangoPTRepository(IPTRepository):
         if trainer_overlap:
             return True
 
-        # 3. Overlap with ClassSchedule
-        class_overlap = ClassSchedule.objects.filter(
-            trainer=trainer,
-            start_time__date=booking_date,
-            status__in=[ScheduleStatus.OPEN, ScheduleStatus.FULL],
-            start_time__time__lt=end_time,
-            end_time__time__gt=start_time,
-        ).exists()
+        # 3. Overlap with ClassSchedule (N/A)
+        class_overlap = False
         return class_overlap
 
     def has_user_pt_booking_conflict(self, user, booking_date, start_time, end_time):
@@ -97,14 +89,8 @@ class DjangoPTRepository(IPTRepository):
         if trainer_overlap:
             return True
 
-        # 3. Overlap with Gym Class Booking
-        class_overlap = Booking.objects.filter(
-            user=user,
-            status__in=ACTIVE_BOOKING_STATUSES,
-            schedule__start_time__date=booking_date,
-            schedule__start_time__time__lt=end_time,
-            schedule__end_time__time__gt=start_time,
-        ).exists()
+        # 3. Overlap with Gym Class Booking (N/A)
+        class_overlap = False
         return class_overlap
 
     def has_active_pt_package(self, user):

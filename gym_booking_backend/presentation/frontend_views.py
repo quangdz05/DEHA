@@ -12,11 +12,8 @@ from gym_booking_backend.application.services import (
     membership_service,
     payment_service,
     profile_service,
-    schedule_service,
 )
 from gym_booking_backend.application.use_cases import (
-    cancel_booking,
-    create_booking,
     create_membership,
     create_payment,
     create_review,
@@ -24,7 +21,7 @@ from gym_booking_backend.application.use_cases import (
     update_profile,
 )
 from gym_booking_backend.domain.exceptions import GymException
-from gym_booking_backend.infrastructure.models import ClassSchedule, GymClass, Payment, Trainer, UserMembership
+from gym_booking_backend.infrastructure.models import Payment, Trainer, UserMembership
 
 
 def home(request):
@@ -32,7 +29,7 @@ def home(request):
         request,
         "home.html",
         {
-            "featured_classes": catalog_service.get_classes()[:6],
+            "featured_classes": [],
             "featured_trainers": catalog_service.get_trainers()[:3],
             "packages": membership_service.get_active_packages(),
         },
@@ -123,97 +120,7 @@ def trainer_detail(request, trainer_id):
     )
 
 
-def class_list(request):
-    classes = catalog_service.get_classes(
-        category_id=request.GET.get("category") or None,
-        trainer_id=request.GET.get("trainer") or None,
-    )
-    query = request.GET.get("q", "").strip()
-    difficulty = request.GET.get("difficulty", "").strip()
-    if query:
-        classes = classes.filter(name__icontains=query)
-    if difficulty:
-        classes = classes.filter(difficulty_level=difficulty)
-    return render(
-        request,
-        "classes/class_list.html",
-        {
-            "classes": classes,
-            "categories": catalog_service.get_categories(),
-            "trainers": catalog_service.get_trainers(),
-            "selected": request.GET,
-        },
-    )
 
-
-def class_detail(request, class_id):
-    gym_class = get_object_or_404(GymClass, id=class_id)
-    schedules = ClassSchedule.objects.select_related("room", "gym_class__trainer").filter(gym_class=gym_class)
-    return render(
-        request,
-        "classes/class_detail.html",
-        {"gym_class": gym_class, "schedules": schedules},
-    )
-
-
-def schedule_list(request):
-    schedules = schedule_service.get_schedules(
-        date=request.GET.get("date") or None,
-        trainer_id=request.GET.get("trainer") or None,
-        available=request.GET.get("available") == "on",
-    )
-    category_id = request.GET.get("category")
-    if category_id:
-        schedules = schedules.filter(gym_class__category_id=category_id)
-    return render(
-        request,
-        "schedules/schedule_list.html",
-        {
-            "schedules": schedules,
-            "trainers": catalog_service.get_trainers(),
-            "categories": catalog_service.get_categories(),
-            "selected": request.GET,
-        },
-    )
-
-
-@login_required
-def booking_confirm(request, schedule_id):
-    schedule = get_object_or_404(ClassSchedule.objects.select_related("gym_class", "gym_class__trainer", "room"), id=schedule_id)
-    if request.method == "POST":
-        try:
-            create_booking.execute(request.user, schedule.id, request.POST.get("note", ""))
-            messages.success(request, "Dat lich thanh cong.")
-            return redirect("frontend:my_bookings")
-        except GymException as exc:
-            messages.error(request, str(exc))
-    return render(request, "bookings/booking_confirm.html", {"schedule": schedule})
-
-
-@login_required
-def my_bookings(request):
-    bookings = booking_service.get_my_bookings(request.user)
-    status = request.GET.get("status")
-    if status:
-        bookings = bookings.filter(status=status)
-    return render(request, "bookings/my_bookings.html", {"bookings": bookings, "selected_status": status})
-
-
-@login_required
-def booking_detail(request, booking_id):
-    booking = get_object_or_404(booking_service.get_my_bookings(request.user), id=booking_id)
-    return render(request, "bookings/booking_detail.html", {"booking": booking})
-
-
-@login_required
-def booking_cancel(request, booking_id):
-    if request.method == "POST":
-        try:
-            cancel_booking.execute(request.user, booking_id)
-            messages.success(request, "Da huy lich tap.")
-        except GymException as exc:
-            messages.error(request, str(exc))
-    return redirect("frontend:my_bookings")
 
 
 def package_list(request):
@@ -258,16 +165,13 @@ def payment_history(request):
 
 @login_required
 def review_form(request):
-    class_id = request.GET.get("class")
     trainer_id = request.GET.get("trainer")
-    gym_class = GymClass.objects.filter(id=class_id).first() if class_id else None
     trainer = Trainer.objects.filter(id=trainer_id).first() if trainer_id else None
     if request.method == "POST":
         try:
             create_review.execute(
                 request.user,
                 trainer_id=request.POST.get("trainer") or None,
-                gym_class_id=request.POST.get("gym_class") or None,
                 rating=request.POST.get("rating"),
                 comment=request.POST.get("comment", ""),
             )
@@ -278,5 +182,5 @@ def review_form(request):
     return render(
         request,
         "reviews/review_form.html",
-        {"gym_class": gym_class, "trainer": trainer},
+        {"trainer": trainer},
     )

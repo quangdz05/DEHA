@@ -17,10 +17,6 @@ from gym_booking_backend.domain.constants import (
     ScheduleStatus,
 )
 from gym_booking_backend.infrastructure.models import (
-    Booking,
-    Category,
-    ClassSchedule,
-    GymClass,
     MembershipPackage,
     Payment,
     Profile,
@@ -66,19 +62,14 @@ class Command(BaseCommand):
         self._create_profile(member_1, "Nguyen Van Minh", "0912345678", GenderChoices.MALE, "Quan 1, TP.HCM")
         self._create_profile(member_2, "Tran Thi Lan", "0987654321", GenderChoices.FEMALE, "Quan 3, TP.HCM")
 
-        categories = self._create_categories()
         trainers = self._create_trainers()
         rooms = self._create_rooms()
-        classes = self._create_classes(categories, trainers)
-        schedules = self._create_schedules(classes, rooms)
         packages = self._create_membership_packages()
         memberships = self._create_memberships([member_1, member_2], packages)
         self._create_payments(memberships)
-        self._create_bookings(member_1, schedules)
-        self._create_reviews(member_1, member_2, trainers, classes)
+        self._create_reviews(member_1, member_2, trainers)
         self._create_pt_packages()
         self._create_trainer_schedules(trainers)
-        self._sync_schedule_participants()
 
         self.stdout.write(self.style.SUCCESS("Seed data created successfully."))
         self.stdout.write("Admin: username=admin password=admin123456")
@@ -111,21 +102,7 @@ class Command(BaseCommand):
             },
         )
 
-    def _create_categories(self):
-        data = [
-            ("Yoga", "Cac lop yoga giup tang do deo dai va can bang co the."),
-            ("Cardio", "Bai tap tang suc ben va dot mo."),
-            ("Boxing", "Lop boxing nang cao phan xa va the luc."),
-            ("Zumba", "Lop nhay ket hop cardio vui nhon."),
-            ("Weight Training", "Luyen tap suc manh voi ta va may tap."),
-        ]
-        return {
-            name: Category.objects.update_or_create(
-                name=name,
-                defaults={"description": description, "status": CommonStatus.ACTIVE},
-            )[0]
-            for name, description in data
-        }
+
 
     def _create_trainers(self):
         data = [
@@ -163,61 +140,7 @@ class Command(BaseCommand):
             for name, location, capacity in data
         }
 
-    def _create_classes(self, categories, trainers):
-        data = [
-            ("Yoga co ban", "Yoga", "Yoga", DifficultyLevel.BEGINNER, 60, "Yoga cho nguoi moi bat dau."),
-            ("Cardio dot mo", "Cardio", "Cardio", DifficultyLevel.INTERMEDIATE, 45, "Cardio cuong do vua."),
-            (
-                "Weight Training",
-                "Weight Training",
-                "Personal Trainer",
-                DifficultyLevel.INTERMEDIATE,
-                60,
-                "Tap suc manh voi ta va may tap.",
-            ),
-        ]
-        classes = {}
-        for name, category, specialty, level, duration, description in data:
-            gym_class, _ = GymClass.objects.update_or_create(
-                name=name,
-                defaults={
-                    "category": categories[category],
-                    "trainer": trainers[specialty],
-                    "difficulty_level": level,
-                    "duration_minutes": duration,
-                    "description": description,
-                    "status": CommonStatus.ACTIVE,
-                },
-            )
-            classes[name] = gym_class
-        return classes
 
-    def _create_schedules(self, classes, rooms):
-        today = timezone.localdate()
-        schedule_data = [
-            ("Yoga co ban", "Room A", 1, time(18, 0), 20),
-            ("Cardio dot mo", "Room B", 1, time(19, 30), 15),
-            ("Weight Training", "Room C", 4, time(19, 0), 25),
-            ("Cardio dot mo", "Room A", 6, time(7, 0), 20),
-        ]
-        schedules = []
-        for class_name, room_name, day_offset, start_at, max_participants in schedule_data:
-            gym_class = classes[class_name]
-            start_date = today + timedelta(days=day_offset)
-            start_time = timezone.make_aware(datetime.combine(start_date, start_at), timezone.get_current_timezone())
-            end_time = start_time + timedelta(minutes=gym_class.duration_minutes)
-            schedule, _ = ClassSchedule.objects.update_or_create(
-                gym_class=gym_class,
-                room=rooms[room_name],
-                start_time=start_time,
-                defaults={
-                    "end_time": end_time,
-                    "max_participants": max_participants,
-                    "status": ScheduleStatus.OPEN,
-                },
-            )
-            schedules.append(schedule)
-        return schedules
 
     def _create_membership_packages(self):
         data = [
@@ -270,35 +193,17 @@ class Command(BaseCommand):
                 },
             )
 
-    def _create_bookings(self, user, schedules):
-        for index, schedule in enumerate(schedules[:2], start=1):
-            Booking.objects.update_or_create(
-                booking_code=f"SEED-BK-{user.username.upper()}-{index}",
-                defaults={
-                    "user": user,
-                    "schedule": schedule,
-                    "status": BookingStatus.CONFIRMED,
-                    "note": "Du lieu mau",
-                },
-            )
-
-    def _create_reviews(self, member_1, member_2, trainers, classes):
+    def _create_reviews(self, member_1, member_2, trainers):
         Review.objects.update_or_create(
             user=member_1,
             trainer=trainers["Yoga"],
-            defaults={"rating": 5, "comment": "HLV huong dan rat de hieu.", "gym_class": None},
+            defaults={"rating": 5, "comment": "HLV huong dan rat de hieu."},
         )
         Review.objects.update_or_create(
             user=member_2,
-            gym_class=classes["Cardio dot mo"],
-            defaults={"rating": 4, "comment": "Lop tap soi dong va hieu qua.", "trainer": None},
+            trainer=trainers["Cardio"],
+            defaults={"rating": 4, "comment": "Lop tap soi dong va hieu qua."},
         )
-
-    def _sync_schedule_participants(self):
-        for schedule in ClassSchedule.objects.all():
-            count = schedule.bookings.filter(status__in=[BookingStatus.PENDING, BookingStatus.CONFIRMED]).count()
-            status = ScheduleStatus.FULL if count >= schedule.max_participants else ScheduleStatus.OPEN
-            ClassSchedule.objects.filter(id=schedule.id).update(current_participants=count, status=status)
 
     def _create_pt_packages(self):
         data = [

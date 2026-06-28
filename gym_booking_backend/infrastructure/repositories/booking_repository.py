@@ -1,6 +1,6 @@
 from django.db.models import Q
 from gym_booking_backend.domain.constants import BookingStatus, PTBookingStatus
-from gym_booking_backend.infrastructure.models import Booking, TrainerBooking, TrainerMonthlyBooking, PTBooking
+from gym_booking_backend.infrastructure.models import TrainerBooking, TrainerMonthlyBooking, PTBooking
 from gym_booking_backend.application.interfaces.repositories.ibooking_repository import IBookingRepository
 
 ACTIVE_BOOKING_STATUSES = [BookingStatus.PENDING, BookingStatus.CONFIRMED]
@@ -8,48 +8,22 @@ ACTIVE_BOOKING_STATUSES = [BookingStatus.PENDING, BookingStatus.CONFIRMED]
 
 class DjangoBookingRepository(IBookingRepository):
     def get_booking_by_id(self, booking_id):
-        return Booking.objects.select_related("schedule", "schedule__gym_class", "schedule__trainer", "schedule__room").filter(id=booking_id).first()
+        return None
 
     def get_next_waitlisted_booking(self, schedule_id, select_for_update=False):
-        queryset = Booking.objects.filter(
-            schedule_id=schedule_id,
-            status=BookingStatus.WAITLIST
-        ).order_by("created_at", "id")
-        if select_for_update:
-            queryset = queryset.select_for_update()
-        return queryset.first()
+        return None
 
     def get_user_bookings(self, user):
-        return Booking.objects.select_related("schedule", "schedule__gym_class", "schedule__trainer", "schedule__room").filter(user=user)
+        return TrainerBooking.objects.none()
 
     def has_duplicate_booking(self, user, schedule):
-        return Booking.objects.filter(user=user, schedule=schedule, status__in=ACTIVE_BOOKING_STATUSES).exists()
+        return False
 
     def has_overlapping_booking(self, user, schedule):
-        class_overlap = Booking.objects.filter(user=user, status__in=ACTIVE_BOOKING_STATUSES).filter(
-            Q(schedule__start_time__lt=schedule.end_time) & Q(schedule__end_time__gt=schedule.start_time)
-        ).exists()
-        trainer_overlap = TrainerBooking.objects.filter(user=user, status__in=ACTIVE_BOOKING_STATUSES).filter(
-            Q(start_time__lt=schedule.end_time) & Q(end_time__gt=schedule.start_time)
-        ).exists()
-        
-        booking_date = schedule.start_time.date()
-        pt_start = schedule.start_time.time()
-        pt_end = schedule.end_time.time()
-        pt_overlap = PTBooking.objects.filter(
-            user=user,
-            booking_date=booking_date,
-            status=PTBookingStatus.CONFIRMED,
-            start_time__lt=pt_end,
-            end_time__gt=pt_start,
-        ).exists()
-        
-        return class_overlap or trainer_overlap or pt_overlap
+        return False
 
     def has_user_overlapping_time(self, user, start_time, end_time, trainer_booking_id=None):
-        class_overlap = Booking.objects.filter(user=user, status__in=ACTIVE_BOOKING_STATUSES).filter(
-            Q(schedule__start_time__lt=end_time) & Q(schedule__end_time__gt=start_time)
-        ).exists()
+        class_overlap = False
 
         trainer_query = TrainerBooking.objects.filter(user=user, status__in=ACTIVE_BOOKING_STATUSES).filter(
             Q(start_time__lt=end_time) & Q(end_time__gt=start_time)
@@ -71,15 +45,7 @@ class DjangoBookingRepository(IBookingRepository):
         return class_overlap or trainer_query.exists() or pt_overlap
 
     def has_trainer_overlapping_time(self, trainer, start_time, end_time, trainer_booking_id=None):
-        from gym_booking_backend.domain.constants import ScheduleStatus
-        from gym_booking_backend.infrastructure.models import ClassSchedule
-
-        class_overlap = ClassSchedule.objects.filter(
-            trainer=trainer,
-            status__in=[ScheduleStatus.OPEN, ScheduleStatus.FULL],
-        ).filter(
-            Q(start_time__lt=end_time) & Q(end_time__gt=start_time)
-        ).exists()
+        class_overlap = False
 
         trainer_query = TrainerBooking.objects.filter(trainer=trainer, status__in=ACTIVE_BOOKING_STATUSES).filter(
             Q(start_time__lt=end_time) & Q(end_time__gt=start_time)
@@ -101,18 +67,10 @@ class DjangoBookingRepository(IBookingRepository):
         return class_overlap or trainer_query.exists() or pt_overlap
 
     def create_booking(self, user, schedule, booking_code, note="", status=None):
-        kwargs = {"user": user, "schedule": schedule, "booking_code": booking_code, "note": note}
-        if status is not None:
-            kwargs["status"] = status
-        return Booking.objects.create(**kwargs)
+        return None
 
     def count_user_bookings_in_week(self, user, start_dt, end_dt):
-        class_count = Booking.objects.filter(
-            user=user,
-            status__in=ACTIVE_BOOKING_STATUSES + [BookingStatus.COMPLETED],
-            schedule__start_time__gte=start_dt,
-            schedule__start_time__lte=end_dt,
-        ).count()
+        class_count = 0
         trainer_count = TrainerBooking.objects.filter(
             user=user,
             status__in=ACTIVE_BOOKING_STATUSES + [BookingStatus.COMPLETED],
@@ -131,18 +89,10 @@ class DjangoBookingRepository(IBookingRepository):
         return TrainerBooking.objects.select_related("trainer", "user__profile").filter(id=booking_id).first()
 
     def has_completed_booking_for_trainer(self, user, trainer_id):
-        return Booking.objects.filter(
-            user=user,
-            status=BookingStatus.COMPLETED,
-            schedule__trainer_id=trainer_id,
-        ).exists()
+        return False
 
     def has_completed_booking_for_class(self, user, gym_class_id):
-        return Booking.objects.filter(
-            user=user,
-            status=BookingStatus.COMPLETED,
-            schedule__gym_class_id=gym_class_id,
-        ).exists()
+        return False
 
     def create_trainer_booking(self, user, trainer, booking_code, start_time, end_time, note=""):
         return TrainerBooking.objects.create(

@@ -1,10 +1,6 @@
 from django.contrib import admin
 
 from .models import (
-    Booking,
-    Category,
-    ClassSchedule,
-    GymClass,
     MembershipPackage,
     Payment,
     Profile,
@@ -54,49 +50,7 @@ class RoomAdmin(admin.ModelAdmin):
         return self.model.all_objects.all()
 
 
-@admin.register(Category)
-class CategoryAdmin(admin.ModelAdmin):
-    list_display = ("id", "name", "status", "is_deleted")
-    search_fields = ("name",)
-    list_filter = ("status", "is_deleted")
 
-    def get_queryset(self, request):
-        return self.model.all_objects.all()
-
-
-@admin.register(GymClass)
-class GymClassAdmin(admin.ModelAdmin):
-    list_display = ("id", "name", "category", "trainer", "difficulty_level", "duration_minutes", "price", "status", "is_deleted")
-    search_fields = ("name", "category__name", "trainer__name")
-    list_filter = ("status", "difficulty_level", "category", "is_deleted")
-
-    def get_queryset(self, request):
-        return self.model.all_objects.all()
-
-
-@admin.register(ClassSchedule)
-class ClassScheduleAdmin(admin.ModelAdmin):
-    list_display = (
-        "id",
-        "gym_class",
-        "room",
-        "trainer",
-        "start_time",
-        "end_time",
-        "max_participants",
-        "current_participants",
-        "status",
-    )
-    search_fields = ("gym_class__name", "room__name", "gym_class__trainer__name")
-    list_filter = ("status", "start_time", "room")
-
-
-# VĐ #3: Booking dùng created_at thay vì booked_at
-@admin.register(Booking)
-class BookingAdmin(admin.ModelAdmin):
-    list_display = ("id", "booking_code", "user", "schedule", "status", "created_at", "cancelled_at")
-    search_fields = ("booking_code", "user__username", "schedule__gym_class__name")
-    list_filter = ("status", "created_at")
 
 
 @admin.register(TrainerBooking)
@@ -149,8 +103,8 @@ class PaymentAdmin(admin.ModelAdmin):
 
 @admin.register(Review)
 class ReviewAdmin(admin.ModelAdmin):
-    list_display = ("id", "user", "trainer", "gym_class", "rating", "created_at")
-    search_fields = ("user__username", "trainer__name", "gym_class__name", "comment")
+    list_display = ("id", "user", "trainer", "rating", "created_at")
+    search_fields = ("user__username", "trainer__name", "comment")
     list_filter = ("rating", "created_at")
 
 

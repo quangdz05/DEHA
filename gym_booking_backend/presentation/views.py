@@ -28,11 +28,8 @@ from gym_booking_backend.application.services import (
     payment_service,
     profile_service,
     review_service,
-    schedule_service,
 )
 from gym_booking_backend.application.use_cases import (
-    cancel_booking,
-    create_booking,
     create_membership,
     create_payment,
     create_review,
@@ -41,10 +38,6 @@ from gym_booking_backend.application.use_cases import (
 )
 from gym_booking_backend.domain.exceptions import GymException
 from gym_booking_backend.presentation.serializers import (
-    BookingSerializer,
-    CategorySerializer,
-    ClassScheduleSerializer,
-    GymClassSerializer,
     MembershipPackageSerializer,
     PaymentSerializer,
     ProfileSerializer,
@@ -168,14 +161,6 @@ class TrainerDetailAPIView(BaseAPIView):
         return self.handle_result(result, TrainerSerializer)
 
 
-class CategoryListAPIView(BaseAPIView):
-    permission_classes = [AllowAny]
-
-    def get(self, request):
-        result = catalog_service.get_categories()
-        return self.handle_result(result, CategorySerializer, many=True)
-
-
 class RoomListAPIView(BaseAPIView):
     permission_classes = [AllowAny]
 
@@ -183,90 +168,6 @@ class RoomListAPIView(BaseAPIView):
         from gym_booking_backend.infrastructure.models import Room
         from gym_booking_backend.presentation.serializers import RoomSerializer
         return Response(RoomSerializer(Room.objects.all(), many=True).data)
-
-
-class GymClassListAPIView(BaseAPIView):
-    permission_classes = [AllowAny]
-
-    def get(self, request):
-        result = catalog_service.get_classes(
-            category_id=request.query_params.get("category"),
-            trainer_id=request.query_params.get("trainer"),
-        )
-        return self.handle_result(result, GymClassSerializer, many=True)
-
-
-class GymClassDetailAPIView(BaseAPIView):
-    permission_classes = [AllowAny]
-
-    def get(self, request, class_id):
-        result = catalog_service.get_class(class_id)
-        return self.handle_result(result, GymClassSerializer)
-
-
-class ScheduleListAPIView(BaseAPIView):
-    permission_classes = [AllowAny]
-
-    def get(self, request):
-        result = schedule_service.get_schedules(
-            date=request.query_params.get("date"),
-            trainer_id=request.query_params.get("trainer"),
-            available=request.query_params.get("available") == "true",
-            unassigned=request.query_params.get("unassigned") == "true",
-        )
-        return self.handle_result(result, ClassScheduleSerializer, many=True)
-
-
-class ScheduleAssignTrainerAPIView(BaseAPIView):
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request, schedule_id):
-        if not hasattr(request.user, "profile") or request.user.profile.role not in ["trainer", "admin"]:
-            return self.handle_result(Result.failure_result("Permission denied.", status_code=403))
-        
-        from gym_booking_backend.infrastructure.models import Trainer, ClassSchedule
-        from django.core.exceptions import ValidationError
-        
-        schedule = ClassSchedule.objects.filter(id=schedule_id).first()
-        if not schedule:
-            return self.handle_result(Result.failure_result("Lịch tập không tồn tại.", status_code=404))
-        
-        role = request.user.profile.role
-        if role == "trainer":
-            # Trainer can only assign themselves
-            trainer = Trainer.objects.filter(user=request.user).first()
-            if not trainer:
-                return self.handle_result(Result.failure_result("Không tìm thấy hồ sơ huấn luyện viên liên kết với tài khoản này.", status_code=404))
-        else:
-            # Admin can assign any trainer by trainer_id
-            trainer_id = request.data.get("trainer_id")
-            if not trainer_id:
-                schedule.trainer = None
-                schedule.save()
-                return self.handle_result(Result.success_result({"message": "Đã hủy phân công huấn luyện viên cho ca học này."}))
-            
-            trainer = Trainer.objects.filter(id=trainer_id).first()
-            if not trainer:
-                return self.handle_result(Result.failure_result("Không tìm thấy huấn luyện viên được yêu cầu.", status_code=404))
-        
-        schedule.trainer = trainer
-        try:
-            schedule.save()
-        except ValidationError as val_err:
-            msg = ", ".join(val_err.messages) if hasattr(val_err, 'messages') else str(val_err)
-            return self.handle_result(Result.failure_result(msg, status_code=400))
-        except Exception as e:
-            return self.handle_result(Result.failure_result(f"Lỗi hệ thống khi phân công: {str(e)}", status_code=400))
-            
-        return self.handle_result(Result.success_result({"message": f"Đã phân công huấn luyện viên {trainer.name} thành công!"}))
-
-
-class ScheduleDetailAPIView(BaseAPIView):
-    permission_classes = [AllowAny]
-
-    def get(self, request, schedule_id):
-        result = schedule_service.get_schedule(schedule_id)
-        return self.handle_result(result, ClassScheduleSerializer)
 
 
 class TrainerScheduleDetailAPIView(BaseAPIView):
@@ -402,26 +303,7 @@ class TrainerScheduleDetailAPIView(BaseAPIView):
         return self.handle_result(Result.success_result({"message": "Cập nhật lịch làm việc hàng tuần thành công!"}))
 
 
-class BookingCreateAPIView(BaseAPIView):
-    permission_classes = [IsAuthenticated]
 
-    def post(self, request):
-        serializer = BookingSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        result = create_booking.execute(
-            request.user,
-            serializer.validated_data["schedule"].id,
-            serializer.validated_data.get("note", ""),
-        )
-        return self.handle_result(result, BookingSerializer)
-
-
-class MyBookingsAPIView(BaseAPIView):
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request):
-        result = booking_service.get_my_bookings(request.user)
-        return self.handle_result(result, BookingSerializer, many=True)
 
 
 class TrainerBookingCreateAPIView(BaseAPIView):
@@ -494,13 +376,7 @@ class TrainerMonthlyBookingCancelAPIView(BaseAPIView):
         return self.handle_result(result, TrainerMonthlyBookingSerializer)
 
 
-class BookingCancelAPIView(BaseAPIView):
-    permission_classes = [IsAuthenticated]
 
-    def post(self, request, booking_id):
-        reason = request.data.get("cancellation_reason", "")
-        result = cancel_booking.execute(request.user, booking_id, reason)
-        return self.handle_result(result, BookingSerializer)
 
 
 class MembershipPackageListAPIView(BaseAPIView):
@@ -616,93 +492,7 @@ class TrainerReviewsAPIView(BaseAPIView):
         return self.handle_result(result, ReviewSerializer, many=True)
 
 
-class ClassReviewsAPIView(BaseAPIView):
-    permission_classes = [AllowAny]
 
-    def get(self, request, class_id):
-        result = review_service.get_reviews_by_class(class_id)
-        return self.handle_result(result, ReviewSerializer, many=True)
-
-
-class AdminBookingListAPIView(BaseAPIView):
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request):
-        if not hasattr(request.user, "profile") or request.user.profile.role != "admin":
-            return self.handle_result(Result.failure_result("Permission denied.", status_code=403))
-        from gym_booking_backend.infrastructure.models import Booking
-        bookings = Booking.objects.select_related("user__profile", "schedule__gym_class", "schedule__trainer", "schedule__room").all()
-        return self.handle_result(Result.success_result(bookings), BookingSerializer, many=True)
-
-
-class AdminBookingStatusAPIView(BaseAPIView):
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request, booking_id):
-        if not hasattr(request.user, "profile") or request.user.profile.role != "admin":
-            return self.handle_result(Result.failure_result("Permission denied.", status_code=403))
-        from gym_booking_backend.infrastructure.models import Booking
-        from gym_booking_backend.domain.constants import BookingStatus, ScheduleStatus
-        booking = Booking.objects.filter(id=booking_id).first()
-        if not booking:
-            return self.handle_result(Result.failure_result("Booking not found.", status_code=404))
-        
-        new_status = request.data.get("status")
-        if new_status not in BookingStatus.values:
-            return self.handle_result(Result.failure_result("Invalid status.", status_code=400))
-        
-        old_status = booking.status
-        booking.status = new_status
-        
-        if new_status == BookingStatus.CANCELLED and old_status != BookingStatus.CANCELLED:
-            schedule = booking.schedule
-            if schedule.current_participants > 0:
-                schedule.current_participants -= 1
-            if schedule.status == ScheduleStatus.FULL:
-                schedule.status = ScheduleStatus.OPEN
-            schedule.save(update_fields=["current_participants", "status", "updated_at"])
-        elif old_status == BookingStatus.CANCELLED and new_status != BookingStatus.CANCELLED:
-            schedule = booking.schedule
-            schedule.current_participants += 1
-            if schedule.current_participants >= schedule.max_participants:
-                schedule.status = ScheduleStatus.FULL
-            schedule.save(update_fields=["current_participants", "status", "updated_at"])
-            
-        booking.save(update_fields=["status"])
-        return self.handle_result(Result.success_result(booking), BookingSerializer)
-
-
-class AdminScheduleBookingListAPIView(BaseAPIView):
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request, schedule_id):
-        if not hasattr(request.user, "profile") or request.user.profile.role != "admin":
-            return self.handle_result(Result.failure_result("Permission denied.", status_code=403))
-
-        from gym_booking_backend.infrastructure.models import Booking, ClassSchedule
-
-        schedule = ClassSchedule.objects.filter(id=schedule_id).first()
-        if not schedule:
-            return self.handle_result(Result.failure_result("Schedule not found.", status_code=404))
-
-        bookings = Booking.objects.select_related("user__profile").filter(schedule_id=schedule_id)
-        data = []
-        for b in bookings:
-            profile = getattr(b.user, "profile", None)
-            data.append({
-                "id": b.id,
-                "booking_code": b.booking_code,
-                "username": b.user.username,
-                "full_name": profile.full_name if profile else b.user.username,
-                "phone": profile.phone if profile else "",
-                "status": b.status,
-                "booked_at": b.booked_at,
-                "health_notes": profile.health_notes if profile else "",
-                "fitness_goals": profile.fitness_goals if profile else "",
-                "emergency_contact_name": profile.emergency_contact_name if profile else "",
-                "emergency_contact_phone": profile.emergency_contact_phone if profile else "",
-            })
-        return self.handle_result(Result.success_result(data))
 
 
 class AdminTrainerMonthlyBookingListAPIView(BaseAPIView):
@@ -744,60 +534,7 @@ class AdminPaymentConfirmAPIView(BaseAPIView):
         return self.handle_result(result, PaymentSerializer)
 
 
-class TrainerScheduleListAPIView(BaseAPIView):
-    permission_classes = [IsAuthenticated]
 
-    def get(self, request):
-        if not hasattr(request.user, "profile") or request.user.profile.role not in ["trainer", "admin"]:
-            return self.handle_result(Result.failure_result("Permission denied.", status_code=403))
-        from gym_booking_backend.infrastructure.models import Trainer, ClassSchedule
-        trainer = Trainer.objects.filter(user=request.user).first()
-        if not trainer:
-            if request.user.profile.role == "admin":
-                schedules = ClassSchedule.objects.select_related("gym_class", "trainer", "room").all()
-                return self.handle_result(Result.success_result(schedules), ClassScheduleSerializer, many=True)
-            return self.handle_result(Result.failure_result("Trainer profile not linked to user.", status_code=404))
-        schedules = ClassSchedule.objects.select_related("gym_class", "trainer", "room").filter(trainer=trainer)
-        return self.handle_result(Result.success_result(schedules), ClassScheduleSerializer, many=True)
-
-
-class TrainerScheduleBookingListAPIView(BaseAPIView):
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request, schedule_id):
-        if not hasattr(request.user, "profile") or request.user.profile.role not in ["trainer", "admin"]:
-            return self.handle_result(Result.failure_result("Permission denied.", status_code=403))
-        from gym_booking_backend.infrastructure.models import Trainer, ClassSchedule, Booking
-        is_admin = request.user.profile.role == "admin"
-        if not is_admin:
-            trainer = Trainer.objects.filter(user=request.user).first()
-            if not trainer:
-                return self.handle_result(Result.failure_result("Trainer profile not linked to user.", status_code=404))
-            schedule = ClassSchedule.objects.filter(id=schedule_id, trainer=trainer).first()
-        else:
-            schedule = ClassSchedule.objects.filter(id=schedule_id).first()
-
-        if not schedule:
-            return self.handle_result(Result.failure_result("Schedule not found or does not belong to you.", status_code=404))
-            
-        bookings = Booking.objects.select_related("user__profile").filter(schedule_id=schedule_id)
-        data = []
-        for b in bookings:
-            profile = getattr(b.user, "profile", None)
-            data.append({
-                "id": b.id,
-                "booking_code": b.booking_code,
-                "username": b.user.username,
-                "full_name": profile.full_name if profile else b.user.username,
-                "phone": profile.phone if profile else "",
-                "status": b.status,
-                "booked_at": b.booked_at,
-                "health_notes": profile.health_notes if profile else "",
-                "fitness_goals": profile.fitness_goals if profile else "",
-                "emergency_contact_name": profile.emergency_contact_name if profile else "",
-                "emergency_contact_phone": profile.emergency_contact_phone if profile else "",
-            })
-        return self.handle_result(Result.success_result(data))
 
 
 class TrainerPersonalBookingListAPIView(BaseAPIView):
@@ -938,71 +675,7 @@ class AdminInvoiceListAPIView(BaseAPIView):
         return self.handle_result(Result.success_result(invoices), InvoiceSerializer, many=True)
 
 
-class AdminCreateScheduleAPIView(BaseAPIView):
-    permission_classes = [IsAuthenticated]
 
-    def post(self, request):
-        if not hasattr(request.user, "profile") or request.user.profile.role != "admin":
-            return self.handle_result(Result.failure_result("Permission denied.", status_code=403))
-        
-        from django.core.exceptions import ValidationError
-        from gym_booking_backend.presentation.serializers import ClassScheduleSerializer
-        serializer = ClassScheduleSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        try:
-            schedule = serializer.save()
-            return self.handle_result(Result.success_result(schedule, status_code=201), ClassScheduleSerializer)
-        except ValidationError as exc:
-            msg = exc.message_dict if hasattr(exc, 'message_dict') else exc.messages
-            return self.handle_result(Result.failure_result(str(msg), status_code=400))
-        except Exception as exc:
-            return self.handle_result(Result.failure_result(str(exc), status_code=400))
-
-
-class AdminScheduleDetailAPIView(BaseAPIView):
-    permission_classes = [IsAuthenticated]
-
-    def _require_admin(self, request):
-        if not hasattr(request.user, "profile") or request.user.profile.role != "admin":
-            return self.handle_result(Result.failure_result("Permission denied.", status_code=403))
-        return None
-
-    def patch(self, request, schedule_id):
-        deny = self._require_admin(request)
-        if deny:
-            return deny
-
-        from django.core.exceptions import ValidationError
-        from gym_booking_backend.infrastructure.models import ClassSchedule
-
-        schedule = ClassSchedule.objects.filter(id=schedule_id).first()
-        if not schedule:
-            return self.handle_result(Result.failure_result("Schedule not found.", status_code=404))
-
-        serializer = ClassScheduleSerializer(schedule, data=request.data, partial=True)
-        serializer.is_valid(raise_exception=True)
-        try:
-            schedule = serializer.save()
-            return self.handle_result(Result.success_result(schedule), ClassScheduleSerializer)
-        except ValidationError as exc:
-            msg = exc.message_dict if hasattr(exc, "message_dict") else exc.messages
-            return self.handle_result(Result.failure_result(str(msg), status_code=400))
-        except Exception as exc:
-            return self.handle_result(Result.failure_result(str(exc), status_code=400))
-
-    def delete(self, request, schedule_id):
-        deny = self._require_admin(request)
-        if deny:
-            return deny
-
-        from gym_booking_backend.infrastructure.models import ClassSchedule
-
-        schedule = ClassSchedule.objects.filter(id=schedule_id).first()
-        if not schedule:
-            return self.handle_result(Result.failure_result("Schedule not found.", status_code=404))
-
-        schedule.delete()
-        return self.handle_result(Result.success_result({"message": "Deleted schedule successfully."}))
 
 
 class AdminCreateUserAPIView(BaseAPIView):
@@ -1080,50 +753,7 @@ class AdminCreateUserAPIView(BaseAPIView):
             return self.handle_result(Result.failure_result(str(exc), status_code=400))
 
 
-class AdminCreateGymClassAPIView(BaseAPIView):
-    permission_classes = [IsAuthenticated]
 
-    def post(self, request):
-        if not hasattr(request.user, "profile") or request.user.profile.role != "admin":
-            return self.handle_result(Result.failure_result("Permission denied.", status_code=403))
-
-        from gym_booking_backend.infrastructure.models import GymClass, Category, Trainer as TrainerModel
-
-        name = request.data.get("name", "").strip()
-        category_id = request.data.get("category")
-        trainer_id = request.data.get("trainer")
-        description = request.data.get("description", "")
-        difficulty_level = request.data.get("difficulty_level", "beginner")
-        duration_minutes = request.data.get("duration_minutes", 60)
-        price = request.data.get("price", 0)
-
-        if not name or not category_id or not trainer_id:
-            return self.handle_result(Result.failure_result("Tên lớp, danh mục và HLV là bắt buộc.", status_code=400))
-
-        category = Category.objects.filter(id=category_id).first()
-        if not category:
-            return self.handle_result(Result.failure_result("Danh mục không tồn tại.", status_code=400))
-
-        trainer = TrainerModel.objects.filter(id=trainer_id).first()
-        if not trainer:
-            return self.handle_result(Result.failure_result("Huấn luyện viên không tồn tại.", status_code=400))
-
-        if GymClass.objects.filter(name=name).exists():
-            return self.handle_result(Result.failure_result(f"Lớp tập '{name}' đã tồn tại.", status_code=400))
-
-        try:
-            gym_class = GymClass.objects.create(
-                name=name,
-                category=category,
-                trainer=trainer,
-                description=description,
-                difficulty_level=difficulty_level,
-                duration_minutes=int(duration_minutes),
-                price=float(price or 0),
-            )
-            return self.handle_result(Result.success_result(gym_class, status_code=201), GymClassSerializer)
-        except Exception as exc:
-            return self.handle_result(Result.failure_result(str(exc), status_code=400))
 
 
 class AdminCreatePackageAPIView(BaseAPIView):
