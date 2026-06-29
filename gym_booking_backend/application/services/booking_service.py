@@ -17,9 +17,11 @@ def _generate_booking_code():
 
 
 def _add_months(start_date, months):
-    year = start_date.year + (start_date.month - 1 + months) // 12
-    month = (start_date.month - 1 + months) % 12 + 1
-    day = min(start_date.day, 28)
+    import calendar
+    month = start_date.month - 1 + months
+    year = start_date.year + month // 12
+    month = month % 12 + 1
+    day = min(start_date.day, calendar.monthrange(year, month)[1])
     return start_date.replace(year=year, month=month, day=day)
 
 
@@ -49,7 +51,7 @@ class BookingService(IBookingService):
             is_full = schedule.current_participants >= schedule.max_participants
 
             if is_full:
-                booking = Booking.objects.create(
+                booking = booking_repository.create_booking(
                     user=user,
                     schedule=schedule,
                     booking_code=_generate_booking_code(),
@@ -96,7 +98,7 @@ class BookingService(IBookingService):
                 
                 if next_waitlist:
                     next_waitlist.status = BookingStatus.PENDING
-                    next_waitlist.save(update_fields=["status"])
+                    next_waitlist.save(update_fields=["status", "updated_at"])
                 else:
                     if schedule.current_participants > 0:
                         schedule.current_participants -= 1

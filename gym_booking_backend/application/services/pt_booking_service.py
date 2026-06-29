@@ -307,10 +307,13 @@ class PTBookingService(IPTBookingService):
 
                 user_package = pt_repository.get_user_pt_package_by_id(booking.user_pt_package_id, select_for_update=True)
                 if user_package:
-                    user_package.used_sessions += 1
+                    from django.db.models import F
+                    user_package.used_sessions = F("used_sessions") + 1
+                    user_package.save(update_fields=["used_sessions"])
+                    user_package.refresh_from_db()
                     if user_package.remaining_sessions == 0:
                         user_package.status = UserPTPackageStatus.COMPLETED
-                    user_package.save(update_fields=["used_sessions", "status"])
+                        user_package.save(update_fields=["status"])
 
             return Result.success_result(booking, status_code=200)
         except GymException as exc:

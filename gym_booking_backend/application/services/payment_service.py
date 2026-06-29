@@ -69,11 +69,13 @@ class PaymentService(IPaymentService):
 
             if payment.membership:
                 from gym_booking_backend.domain.constants import MembershipStatus
-                membership = payment.membership
-                membership.status = MembershipStatus.ACTIVE
-                membership.start_date = timezone.localdate()
-                membership.end_date = membership.start_date + timedelta(days=membership.package.duration_days)
-                membership.save(update_fields=["status", "start_date", "end_date", "updated_at"])
+                if payment.membership.status == MembershipStatus.PENDING:
+                    membership = payment.membership
+                    membership.status = MembershipStatus.ACTIVE
+                    if not membership.start_date:
+                        membership.start_date = timezone.localdate()
+                    membership.end_date = membership.start_date + timedelta(days=membership.package.duration_days)
+                    membership.save(update_fields=["status", "start_date", "end_date", "updated_at"])
 
             if payment.invoice:
                 from gym_booking_backend.infrastructure.models import InvoiceItem

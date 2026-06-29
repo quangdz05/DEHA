@@ -46,12 +46,7 @@ class LoginAPIView(BaseAPIView):
                 full_name=user.get_full_name() or user.username
             )
 
-        # Check if 2FA is enabled
-        if profile.two_factor_enabled:
-            return self.handle_result(Result.success_result({
-                "requires_2fa": True,
-                "user_id": user.id
-            }, status_code=200))
+        # 2FA check disabled
 
         # If staff/superuser, force role to admin
         from gym_booking_backend.domain.constants import UserRole

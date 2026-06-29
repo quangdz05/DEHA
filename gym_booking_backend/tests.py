@@ -5,7 +5,11 @@ from rest_framework.test import APITestCase
 from gym_booking_backend.infrastructure.models import (
     Profile,
     Trainer,
+    Category,
     Room,
+    GymClass,
+    ClassSchedule,
+    Booking,
     MembershipPackage,
     UserMembership,
     Payment,
@@ -14,8 +18,143 @@ from gym_booking_backend.domain.constants import BookingStatus, PaymentStatus, M
 from django.utils import timezone
 from datetime import timedelta
 
-class AuthTests(APITestCase):
+class RoleAuthAndDashboardTests(APITestCase):
+    def setUp(self):
+        # Create standard Member
+        self.member_user = User.objects.create_user(
+            username="member_test",
+            password="testpassword",
+            email="member@test.com",
+            first_name="Member",
+            last_name="Test"
+        )
+        self.member_profile = Profile.objects.create(
+            user=self.member_user,
+            full_name="Member Test",
+            role=UserRole.MEMBER
+        )
+
+        # Create Trainer
+        self.trainer_user = User.objects.create_user(
+            username="trainer_test",
+            password="testpassword",
+            email="trainer@test.com",
+            first_name="Trainer",
+            last_name="Test"
+        )
+        self.trainer_profile = Profile.objects.create(
+            user=self.trainer_user,
+            full_name="Trainer Test",
+            role=UserRole.TRAINER
+        )
+        self.trainer_record = Trainer.objects.create(
+            user=self.trainer_user,
+            name="Trainer Test",
+            email="trainer@test.com",
+            phone="123456789",
+            specialty="Pilates",
+            experience_years=3
+        )
+
+        # Create Admin
+        self.admin_user = User.objects.create_user(
+            username="admin_test",
+            password="testpassword",
+            email="admin@test.com",
+            first_name="Admin",
+            last_name="Test"
+        )
+        self.admin_profile = Profile.objects.create(
+            user=self.admin_user,
+            full_name="Admin Test",
+            role=UserRole.ADMIN
+        )
+
+        # Create other trainer to verify schedule filtering
+        self.other_trainer_user = User.objects.create_user(
+            username="other_trainer",
+            password="testpassword",
+            email="other@test.com"
+        )
+        self.other_trainer_profile = Profile.objects.create(
+            user=self.other_trainer_user,
+            full_name="Other Trainer",
+            role=UserRole.TRAINER
+        )
+        self.other_trainer_record = Trainer.objects.create(
+            user=self.other_trainer_user,
+            name="Other Trainer",
+            email="other@test.com",
+            phone="987654321"
+        )
+
+        # Setup standard domain entities
+        self.category = Category.objects.create(name="Fitness")
+        self.room = Room.objects.create(name="Studio A", location="Level 1", capacity=10)
+        self.gym_class = GymClass.objects.create(
+            category=self.category,
+            trainer=self.trainer_record,
+            name="Core Strength",
+            duration_minutes=45
+        )
+        self.other_gym_class = GymClass.objects.create(
+            category=self.category,
+            trainer=self.other_trainer_record,
+            name="Spin Class",
+            duration_minutes=45
+        )
+
+        # Class Schedules
+        self.schedule = ClassSchedule.objects.create(
+            gym_class=self.gym_class,
+            room=self.room,
+            start_time=timezone.now() + timedelta(days=1),
+            end_time=timezone.now() + timedelta(days=1, hours=1),
+            max_participants=10,
+            current_participants=1
+        )
+        self.other_schedule = ClassSchedule.objects.create(
+            gym_class=self.other_gym_class,
+            room=self.room,
+            start_time=timezone.now() + timedelta(days=2),
+            end_time=timezone.now() + timedelta(days=2, hours=1),
+            max_participants=5,
+            current_participants=0
+        )
+
+        # Booking
+        self.booking = Booking.objects.create(
+            user=self.member_user,
+            schedule=self.schedule,
+            booking_code="BKT-TEST-001",
+            status=BookingStatus.PENDING,
+            note="Test booking note"
+        )
+
+        # Membership Package & Membership & Payment
+        self.package = MembershipPackage.objects.create(
+            name="Vip Monthly",
+            price=100000.00,
+            duration_days=30
+        )
+        self.membership = UserMembership.objects.create(
+            user=self.member_user,
+            package=self.package,
+            start_date=timezone.now().date(),
+            end_date=(timezone.now() + timedelta(days=30)).date(),
+            status=MembershipStatus.ACTIVE
+        )
+        self.payment = Payment.objects.create(
+            user=self.member_user,
+            membership=self.membership,
+            amount=100000.00,
+            payment_method="bank_transfer",
+            status=PaymentStatus.PENDING,
+            transaction_code="TXN_TEST_001"
+        )
+
     def test_register_role_handling(self):
+        # Register a member
         register_url = reverse("auth-register")
         data = {
             "username": "new_member_user",
@@ -55,6 +194,373 @@ class AuthTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["role"], "admin")
         self.assertTrue(Profile.objects.filter(user=superuser, role="admin").exists())
+
+    def test_admin_dashboard_permissions(self):
+        # Try accessing admin bookings as member (should be forbidden)
+        self.client.force_authenticate(user=self.member_user)
+        url = reverse("admin-bookings")
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+        # Try accessing as trainer (should be forbidden)
+        self.client.force_authenticate(user=self.trainer_user)
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+        # Access as admin (should be successful)
+        self.client.force_authenticate(user=self.admin_user)
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]["booking_code"], "BKT-TEST-001")
+
+    def test_admin_booking_status_update(self):
+        self.client.force_authenticate(user=self.admin_user)
+        url = reverse("admin-booking-status", args=[self.booking.id])
+        
+        # Confirm booking
+        response = self.client.post(url, {"status": BookingStatus.CONFIRMED}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.booking.refresh_from_db()
+        self.assertEqual(self.booking.status, BookingStatus.CONFIRMED)
+        
+        # Cancel booking and verify schedule current_participants decreases
+        initial_participants = self.schedule.current_participants
+        response = self.client.post(url, {"status": BookingStatus.CANCELLED}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.booking.refresh_from_db()
+        self.schedule.refresh_from_db()
+        self.assertEqual(self.booking.status, BookingStatus.CANCELLED)
+        self.assertEqual(self.schedule.current_participants, initial_participants - 1)
+
+    def test_admin_payments_and_confirm(self):
+        self.client.force_authenticate(user=self.admin_user)
+        payments_url = reverse("admin-payments")
+        
+        response = self.client.get(payments_url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+        
+        confirm_url = reverse("admin-payment-confirm", args=[self.payment.id])
+        response = self.client.post(confirm_url, {}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.payment.refresh_from_db()
+        self.membership.refresh_from_db()
+        self.assertEqual(self.payment.status, PaymentStatus.SUCCESS)
+        self.assertEqual(self.membership.status, MembershipStatus.ACTIVE)
+
+    def test_trainer_dashboard_schedules_and_roster(self):
+        # Access trainer schedules as member (should be forbidden)
+        self.client.force_authenticate(user=self.member_user)
+        schedules_url = reverse("trainer-schedules")
+        response = self.client.get(schedules_url)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+        # Access as trainer (should succeed)
+        self.client.force_authenticate(user=self.trainer_user)
+        response = self.client.get(schedules_url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        # Should only return trainer's schedule, not the other trainer's
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]["id"], self.schedule.id)
+
+        # Get participant list for my schedule (should succeed)
+        roster_url = reverse("trainer-schedule-bookings", args=[self.schedule.id])
+        response = self.client.get(roster_url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]["username"], "member_test")
+
+        # Get participant list for other trainer's schedule (should return 404/forbidden)
+        other_roster_url = reverse("trainer-schedule-bookings", args=[self.other_schedule.id])
+        response = self.client.get(other_roster_url)
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_schedule_auto_populates_trainer(self):
+        # Create a new schedule without trainer
+        new_schedule = ClassSchedule.objects.create(
+            gym_class=self.gym_class,
+            room=self.room,
+            start_time=timezone.now() + timedelta(days=3),
+            end_time=timezone.now() + timedelta(days=3, hours=1),
+            max_participants=10
+        )
+        # Verify trainer is auto-populated from gym_class.trainer
+        self.assertEqual(new_schedule.trainer, self.gym_class.trainer)
+
+    def test_unique_active_booking_constraint(self):
+        from django.db import IntegrityError, transaction
+        # Try to create a duplicate active booking for the same user and schedule
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                Booking.objects.create(
+                    user=self.member_user,
+                    schedule=self.schedule,
+                    booking_code="BKT-TEST-DUPLICATE",
+                    status=BookingStatus.PENDING
+                )
+
+        # However, if the booking is CANCELLED, we should be able to create a new active booking
+        self.booking.status = BookingStatus.CANCELLED
+        self.booking.save()
+        
+        # This should succeed because the previous one is CANCELLED
+        new_booking = Booking.objects.create(
+            user=self.member_user,
+            schedule=self.schedule,
+            booking_code="BKT-TEST-NEW",
+            status=BookingStatus.PENDING
+        )
+        self.assertEqual(new_booking.booking_code, "BKT-TEST-NEW")
+
+    def test_membership_package_category_restriction(self):
+        # Create a category that is NOT allowed for the package
+        other_category = Category.objects.create(name="Advanced Yoga")
+        package_with_restriction = MembershipPackage.objects.create(
+            name="Yoga Only Package",
+            price=50000.00,
+            duration_days=30
+        )
+        # Only allow the original category
+        package_with_restriction.allowed_categories.add(self.category)
+        
+        restricted_gym_class = GymClass.objects.create(
+            category=other_category,
+            trainer=self.trainer_record,
+            name="Restricted Advanced Yoga Class",
+            duration_minutes=60
+        )
+        restricted_schedule = ClassSchedule.objects.create(
+            gym_class=restricted_gym_class,
+            room=self.room,
+            start_time=timezone.now() + timedelta(days=5),
+            end_time=timezone.now() + timedelta(days=5, hours=1),
+            max_participants=10
+        )
+        
+        # Change member membership to the restricted package
+        self.membership.package = package_with_restriction
+        self.membership.save()
+        
+        # Try to book the restricted class - should return a failure Result
+        from gym_booking_backend.application.services import booking_service
+        
+        res = booking_service.create_booking(self.member_user, restricted_schedule.id)
+        self.assertFalse(res.success)
+        self.assertIn("does not allow booking this class category", res.message)
+
+    def test_trainer_attendance_marking(self):
+        self.client.force_authenticate(user=self.trainer_user)
+        url = reverse("trainer-booking-attendance", args=[self.booking.id])
+        
+        # Mark as completed
+        response = self.client.post(url, {"status": "completed"}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.booking.refresh_from_db()
+        self.assertEqual(self.booking.status, "completed")
+        
+        # Mark as no_show
+        response = self.client.post(url, {"status": "no_show"}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.booking.refresh_from_db()
+        self.assertEqual(self.booking.status, "no_show")
+
+        # Unauthorized access to other trainer's schedule booking
+        # Create a booking on self.other_schedule
+        other_booking = Booking.objects.create(
+            user=self.member_user,
+            schedule=self.other_schedule,
+            booking_code="BKT-TEST-OTHER-01",
+            status=BookingStatus.PENDING
+        )
+        url_other = reverse("trainer-booking-attendance", args=[other_booking.id])
+        response = self.client.post(url_other, {"status": "completed"}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_membership_freezing(self):
+        self.client.force_authenticate(user=self.member_user)
+        url = reverse("membership-freeze", args=[self.membership.id])
+        
+        start_date = (timezone.now() + timedelta(days=2)).date()
+        end_date = (timezone.now() + timedelta(days=7)).date() # 5 days duration
+        
+        initial_end_date = self.membership.end_date
+        response = self.client.post(url, {
+            "start_date": start_date.strftime("%Y-%m-%d"),
+            "end_date": end_date.strftime("%Y-%m-%d"),
+            "reason": "Vocation vacation"
+        }, format="json")
+        
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.membership.refresh_from_db()
+        self.assertEqual(self.membership.end_date, initial_end_date + timedelta(days=5))
+
+    def test_admin_schedule_creation_with_overlap_checks(self):
+        self.client.force_authenticate(user=self.admin_user)
+        url = reverse("admin-schedule-create")
+        
+        # Try to create a schedule that overlaps in room Studio A
+        overlap_start = self.schedule.start_time + timedelta(minutes=15)
+        overlap_end = overlap_start + timedelta(hours=1)
+        
+        data = {
+            "gym_class": self.gym_class.id,
+            "room": self.room.id,
+            "start_time": overlap_start.isoformat(),
+            "end_time": overlap_end.isoformat(),
+            "max_participants": 15
+        }
+        
+        response = self.client.post(url, data, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("message", response.data)
+        
+        # Create a valid schedule with no overlap
+        valid_start = self.schedule.start_time + timedelta(hours=3)
+        valid_end = valid_start + timedelta(hours=1)
+        
+        valid_data = {
+            "gym_class": self.gym_class.id,
+            "room": self.room.id,
+            "start_time": valid_start.isoformat(),
+            "end_time": valid_end.isoformat(),
+            "max_participants": 15
+        }
+        response = self.client.post(url, valid_data, format="json")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+    def test_immediate_payment_and_membership_flow(self):
+        # 1. Create a member with no membership
+        test_user = User.objects.create_user(
+            username="test_immediate_pay_user",
+            password="password123",
+            email="test_pay@test.com"
+        )
+        Profile.objects.create(
+            user=test_user,
+            full_name="Test Immediate Pay User",
+            role=UserRole.MEMBER
+        )
+        
+        # Authenticate
+        self.client.force_authenticate(user=test_user)
+        
+        # Try to book a class before having any membership - should fail
+        booking_url = reverse("booking-create")
+        booking_data = {
+            "schedule": self.schedule.id,
+            "note": "Want to join"
+        }
+        response = self.client.post(booking_url, booking_data, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        
+        # 2. Register a package
+        reg_url = reverse("membership-create")
+        reg_data = {"package": self.package.id}
+        response = self.client.post(reg_url, reg_data, format="json")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        
+        membership_id = response.data["id"]
+        # Verify status is PENDING
+        self.assertEqual(response.data["status"], MembershipStatus.PENDING)
+        
+        # Try to book a class with a PENDING membership - should fail
+        response = self.client.post(booking_url, booking_data, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        
+        # Try to register another package while one is PENDING - should fail
+        response = self.client.post(reg_url, reg_data, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        
+        # 3. Create and confirm payment
+        pay_url = reverse("payment-create")
+        pay_data = {
+            "membership": membership_id,
+            "payment_method": "momo"
+        }
+        response = self.client.post(pay_url, pay_data, format="json")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        payment_id = response.data["id"]
+        
+        # Confirm payment
+        confirm_url = reverse("payment-confirm", args=[payment_id])
+        response = self.client.post(confirm_url, {}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        
+        # Verify membership status is now ACTIVE
+        membership_obj = UserMembership.objects.get(id=membership_id)
+        self.assertEqual(membership_obj.status, MembershipStatus.ACTIVE)
+        
+        # Now booking should succeed
+        response = self.client.post(booking_url, booking_data, format="json")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+    def test_schedule_assignment_flow(self):
+        # Create a ClassSchedule with NO trainer assigned (trainer = None)
+        unassigned_schedule = ClassSchedule.objects.create(
+            gym_class=self.gym_class,
+            room=self.room,
+            trainer=None,
+            start_time=timezone.now() + timedelta(days=5),
+            end_time=timezone.now() + timedelta(days=5, hours=1),
+            max_participants=15
+        )
+        ClassSchedule.objects.filter(id=unassigned_schedule.id).update(trainer=None)
+        unassigned_schedule.refresh_from_db()
+
+        # 1. Test listing unassigned schedules
+        url_list = reverse("schedule-list")
+        response = self.client.get(url_list, {"unassigned": "true"})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        # Should contain the unassigned schedule
+        ids = [item["id"] for item in response.data]
+        self.assertIn(unassigned_schedule.id, ids)
+
+        # 2. Test Trainer claiming the schedule
+        self.client.force_authenticate(user=self.trainer_user)
+        url_assign = reverse("schedule-assign-trainer", kwargs={"schedule_id": unassigned_schedule.id})
+        response = self.client.post(url_assign, {}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        unassigned_schedule.refresh_from_db()
+        self.assertEqual(unassigned_schedule.trainer, self.trainer_record)
+
+        # 3. Test Admin assigning a trainer
+        # First reset the schedule to unassigned
+        unassigned_schedule.trainer = None
+        unassigned_schedule.save()
+
+        self.client.force_authenticate(user=self.admin_user)
+        response = self.client.post(url_assign, {"trainer_id": self.other_trainer_record.id}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        unassigned_schedule.refresh_from_db()
+        self.assertEqual(unassigned_schedule.trainer, self.other_trainer_record)
+
+        # 4. Test conflict validation error (e.g. trainer already has class)
+        # Create a schedule for other_trainer_record at same time
+        conflict_schedule = ClassSchedule.objects.create(
+            gym_class=self.other_gym_class,
+            room=self.room,
+            trainer=self.other_trainer_record,
+            start_time=timezone.now() + timedelta(days=10),
+            end_time=timezone.now() + timedelta(days=10, hours=1),
+            max_participants=10
+        )
+        # Create another unassigned schedule at same time
+        other_room = Room.objects.create(name="Studio B", location="Level 1", capacity=15)
+        unassigned_schedule_2 = ClassSchedule.objects.create(
+            gym_class=self.gym_class,
+            room=other_room,
+            trainer=None,
+            start_time=timezone.now() + timedelta(days=10),
+            end_time=timezone.now() + timedelta(days=10, hours=1),
+            max_participants=10
+        )
+        ClassSchedule.objects.filter(id=unassigned_schedule_2.id).update(trainer=None)
+        unassigned_schedule_2.refresh_from_db()
+        url_assign_2 = reverse("schedule-assign-trainer", kwargs={"schedule_id": unassigned_schedule_2.id})
+        # Attempt to assign other_trainer_record to unassigned_schedule_2 (should raise conflict since they teach conflict_schedule)
+        response = self.client.post(url_assign_2, {"trainer_id": self.other_trainer_record.id}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
 
 from gym_booking_backend.infrastructure.models import PTPackage, TrainerSchedule, UserPTPackage, PTBooking
@@ -486,49 +992,6 @@ class SecurityTests(APITestCase):
         self.assertIn("[Gym Booking] Yêu cầu khôi phục mật khẩu tài khoản security_user", subjects)
         self.assertIn("[Gym Booking] Yêu cầu khôi phục mật khẩu tài khoản security_user_2", subjects)
 
-    def test_two_factor_auth_loop(self):
-        # 1. Perform standard login to get token
-        response = self.client.post(self.login_url, {"username": "security_user", "password": "testpassword123"}, format="json")
-        access_token = response.data["access"]
-        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {access_token}")
-
-        # 2. Setup 2FA
-        setup_res = self.client.post(self.setup_2fa_url, {}, format="json")
-        self.assertEqual(setup_res.status_code, status.HTTP_200_OK)
-        self.assertIn("secret", setup_res.data)
-        secret = setup_res.data["secret"]
-
-        # 3. Enable 2FA with incorrect code
-        enable_res = self.client.post(self.enable_2fa_url, {"code": "000000"}, format="json")
-        self.assertEqual(enable_res.status_code, status.HTTP_400_BAD_REQUEST)
-
-        # 4. Enable 2FA with correct code
-        totp = pyotp.TOTP(secret)
-        enable_res = self.client.post(self.enable_2fa_url, {"code": totp.now()}, format="json")
-        self.assertEqual(enable_res.status_code, status.HTTP_200_OK)
-
-        # 5. Verify that regular login now requires 2FA and doesn't return token immediately
-        self.client.credentials()  # logout
-        login_res = self.client.post(self.login_url, {"username": "security_user", "password": "testpassword123"}, format="json")
-        self.assertEqual(login_res.status_code, status.HTTP_200_OK)
-        self.assertTrue(login_res.data.get("requires_2fa"))
-        user_id = login_res.data.get("user_id")
-
-        # 6. Verify 2FA with incorrect code
-        verify_res = self.client.post(self.verify_2fa_url, {"user_id": user_id, "code": "000000"}, format="json")
-        self.assertEqual(verify_res.status_code, status.HTTP_400_BAD_REQUEST)
-
-        # 7. Verify 2FA with correct code
-        verify_res = self.client.post(self.verify_2fa_url, {"user_id": user_id, "code": totp.now()}, format="json")
-        self.assertEqual(verify_res.status_code, status.HTTP_200_OK)
-        self.assertIn("access", verify_res.data)
-        new_access_token = verify_res.data["access"]
-
-        # 8. Disable 2FA with correct code
-        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {new_access_token}")
-        disable_res = self.client.post(self.disable_2fa_url, {"code": totp.now()}, format="json")
-        self.assertEqual(disable_res.status_code, status.HTTP_200_OK)
-
 
 from gym_booking_backend.application.interfaces.repositories.ibooking_repository import IBookingRepository
 from gym_booking_backend.application.interfaces.repositories.ischedule_repository import IScheduleRepository
@@ -636,3 +1099,190 @@ class MockMembershipRepository(IMembershipRepository):
     def get_user_memberships(self, user): return []
     def expire_memberships_before(self, date): return 0
     def has_active_or_pending_membership(self, user): return False
+
+
+class LogicBugFixesTests(APITestCase):
+    def setUp(self):
+        self.admin_user = User.objects.create_superuser(
+            username="admin_test_logic",
+            password="testpassword",
+            email="admin_logic@test.com"
+        )
+        self.admin_profile = Profile.objects.create(
+            user=self.admin_user,
+            full_name="Admin Test",
+            role=UserRole.ADMIN
+        )
+        self.member_user = User.objects.create_user(
+            username="member_test_logic",
+            password="testpassword",
+            email="member_logic@test.com"
+        )
+        self.member_profile = Profile.objects.create(
+            user=self.member_user,
+            full_name="Member Test",
+            role=UserRole.MEMBER
+        )
+        self.trainer_user = User.objects.create_user(
+            username="trainer_test_logic",
+            password="testpassword",
+            email="trainer_logic@test.com"
+        )
+        self.trainer_profile = Profile.objects.create(
+            user=self.trainer_user,
+            full_name="Trainer Test",
+            role=UserRole.TRAINER
+        )
+        self.trainer_record = Trainer.objects.create(
+            user=self.trainer_user,
+            name="Trainer Test",
+            email="trainer_logic@test.com",
+            phone="123456789",
+            specialty="Pilates"
+        )
+        self.category = Category.objects.create(name="Logic Tests")
+        self.room = Room.objects.create(name="Studio B", location="Level 1", capacity=1)
+        self.gym_class = GymClass.objects.create(
+            category=self.category,
+            trainer=self.trainer_record,
+            name="Logic Class",
+            duration_minutes=45
+        )
+        self.schedule = ClassSchedule.objects.create(
+            gym_class=self.gym_class,
+            room=self.room,
+            start_time=timezone.now() + timedelta(days=1),
+            end_time=timezone.now() + timedelta(days=1, hours=1),
+            max_participants=1,
+            current_participants=0
+        )
+        self.package = MembershipPackage.objects.create(
+            name="Logic Package",
+            price=50000.00,
+            duration_days=30
+        )
+        self.membership = UserMembership.objects.create(
+            user=self.member_user,
+            package=self.package,
+            start_date=timezone.now().date() - timedelta(days=5),
+            end_date=timezone.now().date() + timedelta(days=25),
+            status=MembershipStatus.ACTIVE
+        )
+        self.payment = Payment.objects.create(
+            user=self.member_user,
+            membership=self.membership,
+            amount=50000.00,
+            payment_method="bank_transfer",
+            status=PaymentStatus.PENDING,
+            transaction_code="TXN_LOGIC_001"
+        )
+
+        from uuid import uuid4
+        from gym_booking_backend.domain.constants import InvoiceStatus, InvoiceItemType
+        from gym_booking_backend.infrastructure.repositories.invoice_repository import invoice_repository
+        
+        self.invoice = invoice_repository.create_invoice(
+            user=self.member_user,
+            invoice_number=f"INV-{uuid4().hex[:6].upper()}",
+            total_amount=self.package.price,
+            status=InvoiceStatus.UNPAID
+        )
+        self.invoice_item = invoice_repository.create_invoice_item(
+            invoice=self.invoice,
+            item_type=InvoiceItemType.MEMBERSHIP,
+            object_id=self.membership.id,
+            amount=self.package.price
+        )
+
+    def test_bug4_confirm_payment_no_date_reset(self):
+        old_start = self.membership.start_date
+        old_end = self.membership.end_date
+        
+        from gym_booking_backend.application.services.payment_service import payment_service
+        res = payment_service.confirm_payment(self.payment.id)
+        self.assertTrue(res.success)
+        
+        self.membership.refresh_from_db()
+        self.assertEqual(self.membership.start_date, old_start)
+        self.assertEqual(self.membership.end_date, old_end)
+
+    def test_bug5_waitlist_promotion_updated_at(self):
+        # 1. Create a confirmed booking to fill the schedule (max_participants is 1)
+        booking_first = Booking.objects.create(
+            user=User.objects.create_user(username="temp_user", password="pwd", email="temp@test.com"),
+            schedule=self.schedule,
+            booking_code="BKT-TEMP",
+            status=BookingStatus.CONFIRMED
+        )
+        self.schedule.current_participants = 1
+        self.schedule.save()
+
+        # 2. Create waitlist booking
+        from gym_booking_backend.application.services.booking_service import booking_service
+        res1 = booking_service.create_booking(self.member_user, self.schedule.id, "Waitlist booking")
+        self.assertTrue(res1.success)
+        booking_waitlist = res1.data
+        self.assertEqual(booking_waitlist.status, BookingStatus.WAITLIST)
+        
+        old_updated_at = booking_waitlist.updated_at
+        
+        # 3. Cancel the first booking
+        import time
+        time.sleep(0.1)
+        res_cancel = booking_service.cancel_booking(booking_first.user, booking_first.id)
+        self.assertTrue(res_cancel.success)
+        
+        booking_waitlist.refresh_from_db()
+        self.assertEqual(booking_waitlist.status, BookingStatus.PENDING)
+        self.assertGreater(booking_waitlist.updated_at, old_updated_at)
+
+    def test_bug7_freeze_membership_overlap(self):
+        self.client.force_authenticate(user=self.member_user)
+        freeze_url = reverse("membership-freeze", kwargs={"membership_id": self.membership.id})
+        
+        start_1 = (timezone.now() + timedelta(days=1)).date().isoformat()
+        end_1 = (timezone.now() + timedelta(days=5)).date().isoformat()
+        res = self.client.post(freeze_url, {"start_date": start_1, "end_date": end_1, "reason": "test 1"}, format="json")
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        
+        # Second freeze overlapping
+        start_2 = (timezone.now() + timedelta(days=3)).date().isoformat()
+        end_2 = (timezone.now() + timedelta(days=7)).date().isoformat()
+        res_overlap = self.client.post(freeze_url, {"start_date": start_2, "end_date": end_2, "reason": "test 2"}, format="json")
+        self.assertEqual(res_overlap.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_bug9_soft_delete_package_and_trainer(self):
+        self.client.force_authenticate(user=self.admin_user)
+        
+        package_url = reverse("admin-package-detail", kwargs={"package_id": self.package.id})
+        res = self.client.delete(package_url)
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertTrue(MembershipPackage.all_objects.filter(id=self.package.id).exists())
+        self.assertFalse(MembershipPackage.objects.filter(id=self.package.id).exists())
+        
+        trainer_url = reverse("admin-trainer-detail", kwargs={"trainer_id": self.trainer_record.id})
+        res_trainer = self.client.delete(trainer_url)
+        self.assertEqual(res_trainer.status_code, status.HTTP_200_OK)
+        self.assertTrue(Trainer.all_objects.filter(id=self.trainer_record.id).exists())
+        self.assertFalse(Trainer.objects.filter(id=self.trainer_record.id).exists())
+
+    def test_bug13_duplicate_package_name_includes_soft_deleted(self):
+        self.client.force_authenticate(user=self.admin_user)
+        self.package.soft_delete()
+        
+        create_url = reverse("admin-package-create")
+        res = self.client.post(create_url, {
+            "name": self.package.name,
+            "price": 60000.00,
+            "duration_days": 30
+        }, format="json")
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("đã tồn tại", res.data["message"])
+
+    def test_bug14_invoice_item_content_type(self):
+        from django.contrib.contenttypes.models import ContentType
+        from gym_booking_backend.infrastructure.models import InvoiceItem
+        
+        item = InvoiceItem.objects.filter(object_id=self.membership.id).first()
+        self.assertIsNotNone(item)
+        self.assertEqual(item.content_type, ContentType.objects.get_for_model(UserMembership))

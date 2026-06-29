@@ -115,6 +115,12 @@ class MembershipService(IMembershipService):
             if not package.is_freezable:
                 return Result.failure_result("This membership package is not freezable.", status_code=400)
 
+            overlapping = membership.freezes.filter(
+                start_date__lt=end_date, end_date__gt=start_date
+            ).exists()
+            if overlapping:
+                return Result.failure_result("Khoảng freeze này trùng với freeze đã tạo.", status_code=400)
+
             existing_freeze_days = sum(f.duration_days for f in membership.freezes.all())
             if existing_freeze_days + duration_days > package.max_freeze_days:
                 return Result.failure_result(f"Freeze duration exceeds maximum allowed days ({package.max_freeze_days} days).", status_code=400)

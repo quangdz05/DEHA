@@ -663,22 +663,11 @@ async function loadMyBookings() {
       `;
     }).join("") : `<tr><td colspan="5" class="text-center text-muted">${english ? "No bookings found." : "Chua co lich tap nao."}</td></tr>`;
 
-    // Load 2FA configurations if element exists on the page
+    // Load 2FA configurations if element exists on the page (2FA disabled)
     const card2fa = document.getElementById("twoFactorSettingsCard");
     const status2fa = document.getElementById("twoFactorStatusSection");
     if (card2fa && status2fa) {
-      try {
-        const profile = await apiFetch("/profile/me/");
-        if (profile.two_factor_enabled) {
-          card2fa.classList.add("d-none");
-        } else {
-          card2fa.classList.remove("d-none");
-          render2FASettings(profile);
-        }
-      } catch (err) {
-        card2fa.classList.remove("d-none");
-        status2fa.innerHTML = `<p class="text-danger">Không thể tải thông tin 2FA: ${err.message}</p>`;
-      }
+      card2fa.classList.add("d-none");
     }
   } catch (error) {
     showAlert(english ? "Please log in to view your bookings." : "Ban can dang nhap de xem lich.", "warning");
@@ -1313,7 +1302,6 @@ function trainerCard(item) {
       <p class="text-secondary mb-1">${item.specialty}</p>
       <div class="trainer-meta">
         <div class="trainer-meta-item"><small>Kinh nghiệm</small><strong>${item.experience_years || 0} năm</strong></div>
-        <div class="trainer-meta-item"><small>Lớp phụ trách</small><strong>${item.class_count || item.classes_count || 0}</strong></div>
       </div>
       ${certs}
       <div class="d-grid gap-2 mt-3">
@@ -1348,7 +1336,6 @@ async function showTrainerDetail(trainerId) {
             </div>
             <div class="modal-footer bg-light py-2">
               <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Đóng</button>
-              <button type="button" class="btn btn-brand btn-sm" id="btnBookTrainerFromDetail">Đặt lịch 1-1</button>
             </div>
           </div>
         </div>

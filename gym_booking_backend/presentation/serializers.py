@@ -2,6 +2,10 @@ from django.contrib.auth.models import User
 from rest_framework import serializers
 
 from gym_booking_backend.infrastructure.models import (
+    Booking,
+    Category,
+    ClassSchedule,
+    GymClass,
     MembershipPackage,
     Payment,
     Profile,
@@ -83,7 +87,108 @@ class RoomSerializer(serializers.ModelSerializer):
         fields = "__all__"
 
 
+class CategorySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Category
+        fields = "__all__"
 
+
+class GymClassSerializer(serializers.ModelSerializer):
+    category_name = serializers.CharField(source="category.name", read_only=True)
+    trainer_name = serializers.CharField(source="trainer.name", read_only=True)
+
+    class Meta:
+        model = GymClass
+        fields = (
+            "id",
+            "category",
+            "category_name",
+            "trainer",
+            "trainer_name",
+            "name",
+            "description",
+            "difficulty_level",
+            "duration_minutes",
+            "price",
+            "image",
+            "status",
+            "created_at",
+            "updated_at",
+        )
+
+
+class ClassScheduleSerializer(serializers.ModelSerializer):
+    gym_class_name = serializers.CharField(source="gym_class.name", read_only=True)
+    trainer_name = serializers.CharField(source="trainer.name", read_only=True)
+    room_name = serializers.CharField(source="room.name", read_only=True)
+    room_amenities = serializers.CharField(source="room.amenities", read_only=True)
+    available_slots = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = ClassSchedule
+        fields = (
+            "id",
+            "gym_class",
+            "gym_class_name",
+            "trainer",
+            "trainer_name",
+            "room",
+            "room_name",
+            "room_amenities",
+            "start_time",
+            "end_time",
+            "max_participants",
+            "current_participants",
+            "available_slots",
+            "status",
+            "created_at",
+            "updated_at",
+        )
+
+
+class BookingSerializer(serializers.ModelSerializer):
+    user_username = serializers.CharField(source="user.username", read_only=True)
+    schedule_name = serializers.CharField(source="schedule.gym_class.name", read_only=True)
+    start_time = serializers.DateTimeField(source="schedule.start_time", read_only=True)
+    end_time = serializers.DateTimeField(source="schedule.end_time", read_only=True)
+    trainer_id = serializers.IntegerField(source="schedule.trainer_id", read_only=True)
+    trainer_name = serializers.CharField(source="schedule.trainer.name", read_only=True)
+    class_price = serializers.DecimalField(source="schedule.gym_class.price", max_digits=10, decimal_places=2, read_only=True)
+    gym_class_id = serializers.IntegerField(source="schedule.gym_class_id", read_only=True)
+    # VĐ #3: booked_at is now a @property alias for created_at
+    booked_at = serializers.DateTimeField(source="created_at", read_only=True)
+
+    class Meta:
+        model = Booking
+        fields = (
+            "id",
+            "user_username",
+            "schedule",
+            "schedule_name",
+            "start_time",
+            "end_time",
+            "booking_code",
+            "status",
+            "note",
+            "booked_at",
+            "cancelled_at",
+            "trainer_id",
+            "trainer_name",
+            "class_price",
+            "gym_class_id",
+        )
+        read_only_fields = (
+            "id",
+            "user_username",
+            "booking_code",
+            "status",
+            "booked_at",
+            "cancelled_at",
+            "trainer_id",
+            "trainer_name",
+            "class_price",
+            "gym_class_id",
+        )
 
 
 class TrainerBookingSerializer(serializers.ModelSerializer):
@@ -303,6 +408,7 @@ class PaymentSerializer(serializers.ModelSerializer):
 class ReviewSerializer(serializers.ModelSerializer):
     user_username = serializers.CharField(source="user.username", read_only=True)
     trainer_name = serializers.CharField(source="trainer.name", read_only=True)
+    class_name = serializers.CharField(source="gym_class.name", read_only=True)
 
     class Meta:
         model = Review
@@ -311,11 +417,13 @@ class ReviewSerializer(serializers.ModelSerializer):
             "user_username",
             "trainer",
             "trainer_name",
+            "gym_class",
+            "class_name",
             "rating",
             "comment",
             "created_at",
         )
-        read_only_fields = ("id", "user_username", "trainer_name", "created_at")
+        read_only_fields = ("id", "user_username", "trainer_name", "class_name", "created_at")
 
 
 class MembershipFreezeSerializer(serializers.ModelSerializer):
