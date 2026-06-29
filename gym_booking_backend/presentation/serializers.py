@@ -13,12 +13,10 @@ from gym_booking_backend.infrastructure.models import (
     Room,
     Trainer,
     TrainerBooking,
-    TrainerMonthlyBooking,
     UserMembership,
     MembershipFreeze,
     Invoice,
     InvoiceItem,
-    PTPackage,
     UserPTPackage,
     PTBooking,
     TrainerSchedule,
@@ -238,55 +236,7 @@ class TrainerBookingSerializer(serializers.ModelSerializer):
         )
 
 
-class TrainerMonthlyBookingSerializer(serializers.ModelSerializer):
-    user_username = serializers.CharField(source="user.username", read_only=True)
-    full_name = serializers.CharField(source="user.profile.full_name", read_only=True)
-    phone = serializers.CharField(source="user.profile.phone", read_only=True)
-    fitness_goals = serializers.CharField(source="user.profile.fitness_goals", read_only=True)
-    health_notes = serializers.CharField(source="user.profile.health_notes", read_only=True)
-    trainer_name = serializers.CharField(source="trainer.name", read_only=True)
-    trainer_session_price = serializers.DecimalField(source="trainer.session_price", max_digits=10, decimal_places=2, read_only=True)
-    # VĐ #3: booked_at is now a @property alias for created_at
-    booked_at = serializers.DateTimeField(source="created_at", read_only=True)
-
-    class Meta:
-        model = TrainerMonthlyBooking
-        fields = (
-            "id",
-            "user_username",
-            "full_name",
-            "phone",
-            "fitness_goals",
-            "health_notes",
-            "trainer",
-            "trainer_name",
-            "trainer_session_price",
-            "start_date",
-            "end_date",
-            "months",
-            "sessions_per_week",
-            "preferred_time",
-            "booking_code",
-            "status",
-            "note",
-            "booked_at",
-            "cancelled_at",
-        )
-        read_only_fields = (
-            "id",
-            "user_username",
-            "full_name",
-            "phone",
-            "fitness_goals",
-            "health_notes",
-            "trainer_name",
-            "trainer_session_price",
-            "end_date",
-            "booking_code",
-            "status",
-            "booked_at",
-            "cancelled_at",
-        )
+# TrainerMonthlyBookingSerializer removed
 
 
 class MembershipPackageSerializer(serializers.ModelSerializer):
@@ -450,10 +400,7 @@ class InvoiceSerializer(serializers.ModelSerializer):
         fields = "__all__"
 
 
-class PTPackageSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = PTPackage
-        fields = "__all__"
+# PTPackageSerializer removed
 
 
 class TrainerScheduleSerializer(serializers.ModelSerializer):
@@ -478,9 +425,15 @@ class UserPTPackageSerializer(serializers.ModelSerializer):
     user_username = serializers.CharField(source="user.username", read_only=True)
     trainer_name = serializers.CharField(source="trainer.name", read_only=True)
     trainer_email = serializers.EmailField(source="trainer.email", read_only=True)
-    package_name = serializers.CharField(source="package.name", read_only=True)
+    package_name = serializers.SerializerMethodField()
     bookings = PTBookingSerializer(many=True, read_only=True)
     remaining_sessions = serializers.IntegerField(read_only=True)
+    total_price = serializers.DecimalField(source="total_price", max_digits=12, decimal_places=2, read_only=True)
+
+    def get_package_name(self, obj):
+        days = (obj.end_date - obj.start_date).days + 1
+        months = max(1, round(days / 30))
+        return f"Tập luyện PT - {months} tháng"
 
     class Meta:
         model = UserPTPackage
@@ -491,7 +444,6 @@ class UserPTPackageSerializer(serializers.ModelSerializer):
             "trainer",
             "trainer_name",
             "trainer_email",
-            "package",
             "package_name",
             "start_date",
             "end_date",
@@ -503,14 +455,15 @@ class UserPTPackageSerializer(serializers.ModelSerializer):
             "start_time",
             "end_time",
             "bookings",
+            "total_price",
             "created_at",
             "updated_at",
         )
-        read_only_fields = ("id", "user", "user_username", "trainer_name", "trainer_email", "package_name", "total_sessions", "used_sessions", "remaining_sessions", "status", "bookings", "created_at", "updated_at")
+        read_only_fields = ("id", "user", "user_username", "trainer_name", "trainer_email", "package_name", "total_sessions", "used_sessions", "remaining_sessions", "status", "bookings", "total_price", "created_at", "updated_at")
 
 
 class MonthlyPTBookingCreateSerializer(serializers.Serializer):
-    package = serializers.IntegerField()
+    months = serializers.IntegerField(min_value=1, max_value=36)
     trainer = serializers.IntegerField()
     start_date = serializers.DateField()
     weekdays = serializers.ListField(child=serializers.IntegerField(min_value=0, max_value=6))

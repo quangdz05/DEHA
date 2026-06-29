@@ -1,0 +1,26 @@
+# Task Checklist — Gym Booking Logic Bug Fixes & Restoration
+
+- [ ] Restore deleted Group Class Models and Database structures
+  - [ ] Delete migration file `0014_remove_booking_idx_booking_status_and_more.py` from filesystem
+  - [ ] Restore deleted models (`Category`, `GymClass`, `ClassSchedule`, `Booking`) and custom fields/constraints in `models.py`
+- [ ] Restore Repositories layer
+  - [ ] Restore implementation of `booking_repository.py`
+  - [ ] Restore implementation of `class_repository.py`
+  - [ ] Restore implementation of `schedule_repository.py`
+- [ ] Restore Serializers, Views and URL endpoints
+  - [ ] Restore group class serializers in `serializers.py`
+  - [ ] Restore group class views in `views.py`
+  - [ ] Restore group class paths in `urls.py`
+  - [ ] Restore original tests in `tests.py`
+- [ ] Implement and verify logic bug fixes
+  - [ ] Fix BUG #4: payment_service.confirm_payment membership date reset
+  - [ ] Fix BUG #5: waitlist promotion updated_at timestamp
+  - [ ] Fix BUG #6: complete_pt_booking used_sessions race condition
+  - [ ] Fix BUG #7: freeze_membership overlap check
+  - [ ] Fix BUG #9: change package and trainer deletion to soft delete
+  - [ ] Fix BUG #10: AdminCreateUserAPIView trainer fields matching
+  - [ ] Fix BUG #11: create_booking waitlist bypass repository
+  - [ ] Fix BUG #12: _add_months monthrange calculation
+  - [ ] Fix BUG #13: check duplicate package name using `all_objects`
+  - [ ] Fix BUG #14: invoice_repository create_invoice_item with content_type
+- [ ] Run backend tests and verify success

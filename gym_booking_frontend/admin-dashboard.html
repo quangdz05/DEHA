@@ -18,9 +18,7 @@
           <li class="nav-item"><a class="nav-link" href="classes.html">Lớp tập</a></li>
           <li class="nav-item"><a class="nav-link" href="trainers.html">HLV</a></li>
           <li class="nav-item"><a class="nav-link" href="packages.html">Gói tập</a></li>
-          <li class="nav-item"><a class="nav-link" href="pt-packages.html">Gói PT</a></li>
           <li class="nav-item d-none" data-role="member"><a class="nav-link" href="my-bookings.html">Lịch của tôi</a></li>
-          <li class="nav-item d-none" data-role="member"><a class="nav-link" href="my-pt-packages.html">Gói PT của tôi</a></li>
           <li class="nav-item d-none" data-role="trainer,admin"><a class="nav-link" href="trainer-dashboard.html">Lịch dạy HLV</a></li>
           <li class="nav-item d-none" data-role="admin"><a class="nav-link active" href="admin-dashboard.html">Quản lý Admin</a></li>
           <li class="nav-item" data-auth="guest"><a class="nav-link" href="login.html">Đăng nhập</a></li>
@@ -152,7 +150,7 @@
                     </select>
                   </div>
                   <div id="trainerExtraFields" class="d-none">
-                    <div class="mb-3"><label class="form-label fw-bold" for="userSpecialty">Chuyên môn</label><input type="text" class="form-control" id="userSpecialty" name="specialty"></div>
+                    <div class="mb-3 d-none"><label class="form-label fw-bold" for="userSpecialty">Chuyên môn</label><input type="text" class="form-control" id="userSpecialty" name="specialty" value="General"></div>
                     <div class="mb-3"><label class="form-label fw-bold" for="userExpYears">Năm kinh nghiệm</label><input type="number" class="form-control" id="userExpYears" name="experience_years" min="0" value="0"></div>
                     <div class="mb-3"><label class="form-label fw-bold" for="userSessionPrice">Giá buổi 1-1 (VNĐ)</label><input type="number" class="form-control" id="userSessionPrice" name="session_price" min="0" step="1000" value="0"></div>
                   </div>
@@ -166,8 +164,8 @@
                 <div class="card-body p-0">
                   <div class="table-responsive">
                     <table class="table table-hover align-middle mb-0">
-                      <thead class="table-light"><tr><th>Tên</th><th>Chuyên môn</th><th>Giá 1-1</th><th>Trạng thái</th><th>Hành động</th></tr></thead>
-                      <tbody id="adminTrainerRows"><tr><td colspan="5" class="text-center py-4 text-muted">Đang tải...</td></tr></tbody>
+                      <thead class="table-light"><tr><th>Tên</th><th>Giá 1-1</th><th>Trạng thái</th><th>Hành động</th></tr></thead>
+                      <tbody id="adminTrainerRows"><tr><td colspan="4" class="text-center py-4 text-muted">Đang tải...</td></tr></tbody>
                     </table>
                   </div>
                 </div>
@@ -187,7 +185,7 @@
                   <div class="mb-3"><label class="form-label fw-bold" for="pkgName">Tên gói</label><input type="text" class="form-control" id="pkgName" name="name" required></div>
                   <div class="mb-3"><label class="form-label fw-bold" for="pkgPrice">Giá (VNĐ)</label><input type="number" class="form-control" id="pkgPrice" name="price" min="0" step="1000" required></div>
                   <div class="mb-3"><label class="form-label fw-bold" for="pkgDuration">Số ngày</label><input type="number" class="form-control" id="pkgDuration" name="duration_days" min="1" value="30" required></div>
-                  <div class="mb-3"><label class="form-label fw-bold" for="pkgMaxBookings">Giới hạn buổi/tuần</label><input type="number" class="form-control" id="pkgMaxBookings" name="max_bookings_per_week" min="1"></div>
+                  <div class="mb-3 d-none"><label class="form-label fw-bold" for="pkgMaxBookings">Giới hạn buổi/tuần</label><input type="number" class="form-control" id="pkgMaxBookings" name="max_bookings_per_week" min="1" value=""></div>
                   <div class="mb-3"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="pkgFreezable" name="is_freezable" checked><label class="form-check-label fw-bold" for="pkgFreezable">Hỗ trợ tạm dừng</label></div></div>
                   <div class="mb-3"><label class="form-label fw-bold" for="pkgMaxFreeze">Số ngày tạm dừng tối đa</label><input type="number" class="form-control" id="pkgMaxFreeze" name="max_freeze_days" min="0" value="30"></div>
                   <div class="mb-3"><label class="form-label fw-bold" for="pkgDescription">Mô tả</label><textarea class="form-control" id="pkgDescription" name="description" rows="3"></textarea></div>
@@ -201,8 +199,8 @@
                 <div class="card-body p-0">
                   <div class="table-responsive">
                     <table class="table table-hover align-middle mb-0">
-                      <thead class="table-light"><tr><th>Tên gói</th><th>Giá</th><th>Số ngày</th><th>Buổi/tuần</th><th>Tạm dừng</th><th>Hành động</th></tr></thead>
-                      <tbody id="adminPackageListRows"><tr><td colspan="6" class="text-center py-4 text-muted">Đang tải...</td></tr></tbody>
+                      <thead class="table-light"><tr><th>Tên gói</th><th>Giá</th><th>Thời gian</th><th>Tạm dừng</th><th>Hành động</th></tr></thead>
+                      <tbody id="adminPackageListRows"><tr><td colspan="5" class="text-center py-4 text-muted">Đang tải...</td></tr></tbody>
                     </table>
                   </div>
                 </div>
@@ -274,9 +272,9 @@
               <label class="form-label fw-bold" for="editTrainerName">Tên HLV</label>
               <input type="text" class="form-control" id="editTrainerName" required>
             </div>
-            <div class="mb-3">
+            <div class="mb-3 d-none">
               <label class="form-label fw-bold" for="editTrainerSpecialty">Chuyên môn</label>
-              <input type="text" class="form-control" id="editTrainerSpecialty" required>
+              <input type="text" class="form-control" id="editTrainerSpecialty" value="General" required>
             </div>
             <div class="mb-3">
               <label class="form-label fw-bold" for="editTrainerExp">Năm kinh nghiệm</label>

@@ -1,6 +1,6 @@
 from django.db.models import Q
 from gym_booking_backend.domain.constants import BookingStatus, PTBookingStatus
-from gym_booking_backend.infrastructure.models import Booking, TrainerBooking, TrainerMonthlyBooking, PTBooking
+from gym_booking_backend.infrastructure.models import Booking, TrainerBooking, PTBooking
 from gym_booking_backend.application.interfaces.repositories.ibooking_repository import IBookingRepository
 
 ACTIVE_BOOKING_STATUSES = [BookingStatus.PENDING, BookingStatus.CONFIRMED]
@@ -151,54 +151,6 @@ class DjangoBookingRepository(IBookingRepository):
             booking_code=booking_code,
             start_time=start_time,
             end_time=end_time,
-            note=note,
-        )
-
-    def get_user_trainer_monthly_bookings(self, user):
-        return TrainerMonthlyBooking.objects.select_related("trainer", "user__profile").filter(user=user)
-
-    def get_trainer_monthly_bookings(self, trainer):
-        return TrainerMonthlyBooking.objects.select_related("trainer", "user__profile").filter(trainer=trainer)
-
-    def get_all_trainer_monthly_bookings(self):
-        return TrainerMonthlyBooking.objects.select_related("trainer", "user__profile").all()
-
-    def get_trainer_monthly_booking_by_id(self, booking_id):
-        return TrainerMonthlyBooking.objects.select_related("trainer", "user__profile").filter(id=booking_id).first()
-
-    def has_overlapping_monthly_booking(self, user, trainer, start_date, end_date, booking_id=None):
-        query = TrainerMonthlyBooking.objects.filter(
-            user=user,
-            trainer=trainer,
-            status__in=ACTIVE_BOOKING_STATUSES,
-            start_date__lte=end_date,
-            end_date__gte=start_date,
-        )
-        if booking_id:
-            query = query.exclude(id=booking_id)
-        return query.exists()
-
-    def create_trainer_monthly_booking(
-        self,
-        user,
-        trainer,
-        booking_code,
-        start_date,
-        end_date,
-        months,
-        sessions_per_week,
-        preferred_time=None,
-        note="",
-    ):
-        return TrainerMonthlyBooking.objects.create(
-            user=user,
-            trainer=trainer,
-            booking_code=booking_code,
-            start_date=start_date,
-            end_date=end_date,
-            months=months,
-            sessions_per_week=sessions_per_week,
-            preferred_time=preferred_time,
             note=note,
         )
 

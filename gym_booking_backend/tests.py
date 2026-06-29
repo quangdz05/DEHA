@@ -563,7 +563,7 @@ class RoleAuthAndDashboardTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
 
-from gym_booking_backend.infrastructure.models import PTPackage, TrainerSchedule, UserPTPackage, PTBooking
+from gym_booking_backend.infrastructure.models import TrainerSchedule, UserPTPackage, PTBooking
 from gym_booking_backend.application.services import pt_booking_service
 from gym_booking_backend.domain.exceptions import PTBookingException
 
@@ -615,15 +615,6 @@ class PTBookingTests(APITestCase):
             status=MembershipStatus.ACTIVE
         )
 
-        # PT Package
-        self.pt_package = PTPackage.objects.create(
-            name="PT Gold 12 Sessions",
-            price=5000000.00,
-            duration_days=30,
-            total_sessions=12,
-            is_active=True
-        )
-
         # Trainer Schedule (Available Monday, Wednesday, Friday from 08:00 to 20:00)
         TrainerSchedule.objects.create(trainer=self.trainer_record, weekday=0, start_time="08:00", end_time="20:00")
         TrainerSchedule.objects.create(trainer=self.trainer_record, weekday=2, start_time="08:00", end_time="20:00")
@@ -638,7 +629,7 @@ class PTBookingTests(APITestCase):
         # Preview PT sessions
         result = pt_booking_service.preview_monthly_pt_bookings(
             user=self.member_user,
-            package_id=self.pt_package.id,
+            months=1,
             trainer_id=self.trainer_record.id,
             start_date=start_date,
             selected_weekdays=[0, 2, 4], # Mon, Wed, Fri
@@ -647,14 +638,14 @@ class PTBookingTests(APITestCase):
         )
         self.assertTrue(result.success)
         previews = result.data
-        self.assertEqual(len(previews), 12)
+        self.assertEqual(len(previews), 13)
         for preview in previews:
             self.assertTrue(preview["is_valid"])
 
         # Create bookings
         result = pt_booking_service.create_monthly_pt_bookings(
             user=self.member_user,
-            package_id=self.pt_package.id,
+            months=1,
             trainer_id=self.trainer_record.id,
             start_date=start_date,
             selected_weekdays=[0, 2, 4],
@@ -665,15 +656,15 @@ class PTBookingTests(APITestCase):
         user_package = result.data["package"]
         bookings = result.data["bookings"]
 
-        self.assertEqual(user_package.total_sessions, 12)
-        self.assertEqual(user_package.remaining_sessions, 12)
-        self.assertEqual(len(bookings), 12)
-        self.assertEqual(PTBooking.objects.filter(user_pt_package=user_package).count(), 12)
+        self.assertEqual(user_package.total_sessions, 13)
+        self.assertEqual(user_package.remaining_sessions, 13)
+        self.assertEqual(len(bookings), 13)
+        self.assertEqual(PTBooking.objects.filter(user_pt_package=user_package).count(), 13)
 
         # Test overlap checking
         result = pt_booking_service.create_monthly_pt_bookings(
             user=self.member_user,
-            package_id=self.pt_package.id,
+            months=1,
             trainer_id=self.trainer_record.id,
             start_date=start_date,
             selected_weekdays=[0, 2, 4],
@@ -690,7 +681,7 @@ class PTBookingTests(APITestCase):
 
         result = pt_booking_service.create_monthly_pt_bookings(
             user=self.member_user,
-            package_id=self.pt_package.id,
+            months=1,
             trainer_id=self.trainer_record.id,
             start_date=start_date,
             selected_weekdays=[0, 2, 4],
@@ -708,7 +699,7 @@ class PTBookingTests(APITestCase):
         user_package.refresh_from_db()
         self.assertEqual(first_booking.status, "completed")
         self.assertEqual(user_package.used_sessions, 1)
-        self.assertEqual(user_package.remaining_sessions, 11)
+        self.assertEqual(user_package.remaining_sessions, 12)
 
         # Cancel other booking
         second_booking = bookings[1]
@@ -744,7 +735,7 @@ class PTBookingTests(APITestCase):
         # Monday is weekday 0, date 2026-06-29 is a Monday
         url = reverse("api-pt-booking-preview")
         response = self.client.get(url, {
-            "package": pt_package.id,
+            "months": 1,
             "trainer": self.trainer_record.id,
             "start_date": "2026-06-29",
             "weekdays": "0,1,2,3,4",
@@ -769,7 +760,7 @@ class PTBookingTests(APITestCase):
 
         # Request 14:00 - 15:00 (outside 08:00 - 12:00)
         response = self.client.get(url, {
-            "package": pt_package.id,
+            "months": 1,
             "trainer": self.trainer_record.id,
             "start_date": "2026-06-29",
             "weekdays": "0,1,2,3,4",
@@ -1036,18 +1027,6 @@ class MockBookingRepository(IBookingRepository):
     def get_trainer_booking_by_id(self, booking_id):
         return None
     def create_trainer_booking(self, user, trainer, booking_code, start_time, end_time, note=""):
-        return None
-    def get_user_trainer_monthly_bookings(self, user):
-        return []
-    def get_trainer_monthly_bookings(self, trainer):
-        return []
-    def get_all_trainer_monthly_bookings(self):
-        return []
-    def get_trainer_monthly_booking_by_id(self, booking_id):
-        return None
-    def has_overlapping_monthly_booking(self, user, trainer, start_date, end_date, booking_id=None):
-        return False
-    def create_trainer_monthly_booking(self, user, trainer, booking_code, start_date, end_date, months, sessions_per_week, preferred_time=None, note=""):
         return None
     def has_completed_booking_for_trainer(self, user, trainer_id):
         return False

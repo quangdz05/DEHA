@@ -8,12 +8,10 @@ from .models import (
     Room,
     Trainer,
     TrainerBooking,
-    TrainerMonthlyBooking,
     UserMembership,
     MembershipFreeze,
     Invoice,
     InvoiceItem,
-    PTPackage,
     TrainerSchedule,
     UserPTPackage,
     PTBooking,
@@ -60,21 +58,7 @@ class TrainerBookingAdmin(admin.ModelAdmin):
     list_filter = ("status", "start_time", "trainer")
 
 
-@admin.register(TrainerMonthlyBooking)
-class TrainerMonthlyBookingAdmin(admin.ModelAdmin):
-    list_display = (
-        "id",
-        "booking_code",
-        "user",
-        "trainer",
-        "start_date",
-        "end_date",
-        "months",
-        "sessions_per_week",
-        "status",
-    )
-    search_fields = ("booking_code", "user__username", "trainer__name")
-    list_filter = ("status", "start_date", "trainer")
+# TrainerMonthlyBookingAdmin removed
 
 
 @admin.register(MembershipPackage)
@@ -129,14 +113,7 @@ class InvoiceItemAdmin(admin.ModelAdmin):
     list_filter = ("item_type",)
 
 
-@admin.register(PTPackage)
-class PTPackageAdmin(admin.ModelAdmin):
-    list_display = ("id", "name", "price", "duration_days", "total_sessions", "is_active", "is_deleted")
-    search_fields = ("name",)
-    list_filter = ("is_active", "is_deleted")
-
-    def get_queryset(self, request):
-        return self.model.all_objects.all()
+# PTPackageAdmin removed
 
 
 @admin.register(TrainerSchedule)
@@ -148,8 +125,8 @@ class TrainerScheduleAdmin(admin.ModelAdmin):
 
 @admin.register(UserPTPackage)
 class UserPTPackageAdmin(admin.ModelAdmin):
-    list_display = ("id", "user", "trainer", "package", "start_date", "end_date", "status")
-    search_fields = ("user__username", "trainer__name", "package__name")
+    list_display = ("id", "user", "trainer", "start_date", "end_date", "status")
+    search_fields = ("user__username", "trainer__name")
     list_filter = ("status", "start_date")
 
 

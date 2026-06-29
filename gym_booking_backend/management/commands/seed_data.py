@@ -24,7 +24,6 @@ from gym_booking_backend.infrastructure.models import (
     Room,
     Trainer,
     UserMembership,
-    PTPackage,
     TrainerSchedule,
 )
 
@@ -34,6 +33,19 @@ class Command(BaseCommand):
 
     @transaction.atomic
     def handle(self, *args, **options):
+        # Clean up database tables to avoid conflicts
+        from gym_booking_backend.infrastructure.models import (
+            UserMembership, Payment, Review, TrainerSchedule, PTBooking, UserPTPackage, Invoice, InvoiceItem
+        )
+        Payment.objects.all().delete()
+        InvoiceItem.objects.all().delete()
+        Invoice.objects.all().delete()
+        UserMembership.objects.all().delete()
+        Review.objects.all().delete()
+        PTBooking.objects.all().delete()
+        UserPTPackage.objects.all().delete()
+        TrainerSchedule.objects.all().delete()
+
         admin = self._create_user(
             username="admin",
             password="admin123456",
@@ -68,7 +80,6 @@ class Command(BaseCommand):
         memberships = self._create_memberships([member_1, member_2], packages)
         self._create_payments(memberships)
         self._create_reviews(member_1, member_2, trainers)
-        self._create_pt_packages()
         self._create_trainer_schedules(trainers)
 
         self.stdout.write(self.style.SUCCESS("Seed data created successfully."))
@@ -143,13 +154,17 @@ class Command(BaseCommand):
 
 
     def _create_membership_packages(self):
+        from gym_booking_backend.infrastructure.models import UserMembership
         data = [
-            ("Basic", "Goi co ban 3 buoi moi tuan.", Decimal("300000.00"), 30, 3),
-            ("Premium", "Goi nang cao 5 buoi moi tuan.", Decimal("500000.00"), 30, 5),
-            ("VIP", "Goi VIP khong gioi han so buoi.", Decimal("800000.00"), 30, None),
+            ("Gói 1 tháng", "Thẻ hội viên tập luyện trong 1 tháng.", Decimal("300000.00"), 30, None),
+            ("Gói 3 tháng", "Thẻ hội viên tập luyện trong 3 tháng.", Decimal("800000.00"), 90, None),
+            ("Gói 6 tháng", "Thẻ hội viên tập luyện trong 6 tháng.", Decimal("1500000.00"), 180, None),
+            ("Gói 12 tháng", "Thẻ hội viên tập luyện trong 12 tháng.", Decimal("2800000.00"), 360, None),
         ]
-        return {
-            name: MembershipPackage.objects.update_or_create(
+        
+        new_packages = {}
+        for name, description, price, duration_days, max_per_week in data:
+            pkg, _ = MembershipPackage.objects.update_or_create(
                 name=name,
                 defaults={
                     "description": description,
@@ -158,13 +173,29 @@ class Command(BaseCommand):
                     "max_bookings_per_week": max_per_week,
                     "status": CommonStatus.ACTIVE,
                 },
-            )[0]
-            for name, description, price, duration_days, max_per_week in data
-        }
+            )
+            new_packages[name] = pkg
+
+        # Migrate user memberships and delete old packages
+        basic_pkg = MembershipPackage.objects.filter(name="Basic").first()
+        premium_pkg = MembershipPackage.objects.filter(name="Premium").first()
+        vip_pkg = MembershipPackage.objects.filter(name="VIP").first()
+        
+        if basic_pkg:
+            UserMembership.objects.filter(package=basic_pkg).update(package=new_packages["Gói 1 tháng"])
+            basic_pkg.delete()
+        if premium_pkg:
+            UserMembership.objects.filter(package=premium_pkg).update(package=new_packages["Gói 3 tháng"])
+            premium_pkg.delete()
+        if vip_pkg:
+            UserMembership.objects.filter(package=vip_pkg).update(package=new_packages["Gói 12 tháng"])
+            vip_pkg.delete()
+
+        return new_packages
 
     def _create_memberships(self, users, packages):
         today = timezone.localdate()
-        data = [(users[0], packages["Basic"]), (users[1], packages["Premium"])]
+        data = [(users[0], packages["Gói 1 tháng"]), (users[1], packages["Gói 3 tháng"])]
         memberships = []
         for user, package in data:
             membership, _ = UserMembership.objects.update_or_create(
@@ -205,24 +236,7 @@ class Command(BaseCommand):
             defaults={"rating": 4, "comment": "Lop tap soi dong va hieu qua."},
         )
 
-    def _create_pt_packages(self):
-        data = [
-            ("PT Basic 8 Sessions", "Gói tập cá nhân cơ bản 8 buổi.", Decimal("3000000.00"), 30, 8),
-            ("PT Standard 12 Sessions", "Gói tập cá nhân tiêu chuẩn 12 buổi.", Decimal("4200000.00"), 30, 12),
-        ]
-        return {
-            name: PTPackage.objects.update_or_create(
-                name=name,
-                defaults={
-                    "description": description,
-                    "price": price,
-                    "duration_days": duration_days,
-                    "total_sessions": total_sessions,
-                    "is_active": True,
-                },
-            )[0]
-            for name, description, price, duration_days, total_sessions in data
-        }
+    # _create_pt_packages removed
 
     def _create_trainer_schedules(self, trainers):
         for specialty, trainer in trainers.items():

@@ -685,7 +685,7 @@ async function handleLogin(event) {
         password: form.password.value,
       }),
     });
-    
+
     if (user.requires_2fa) {
       document.getElementById("loginFormSection").classList.add("d-none");
       document.getElementById("twoFactorUserId").value = user.user_id;
@@ -723,7 +723,7 @@ async function handle2FAVerify(event) {
       method: "POST",
       body: JSON.stringify({ user_id, code })
     });
-    
+
     saveUserSession(user);
     if (typeof markUserActivity === "function") {
       markUserActivity(true);
@@ -1299,7 +1299,6 @@ function trainerCard(item) {
     <div class="card-ui text-center p-4">
       ${avatar}
       <h5 class="fw-bold">${item.name}</h5>
-      <p class="text-secondary mb-1">${item.specialty}</p>
       <div class="trainer-meta">
         <div class="trainer-meta-item"><small>Kinh nghiệm</small><strong>${item.experience_years || 0} năm</strong></div>
       </div>
@@ -1402,7 +1401,6 @@ async function showTrainerDetail(trainerId) {
           <div class="d-flex flex-column align-items-center h-100 p-2">
             ${avatar}
             <h4 class="fw-bold mt-2 mb-1">${trainer.name}</h4>
-            <p class="text-secondary mb-3">${trainer.specialty}</p>
             
             <div class="w-100 bg-light rounded-3 p-3 mb-3 text-start">
               <div class="d-flex justify-content-between mb-2">
@@ -1650,6 +1648,7 @@ function packageCard(item) {
   const freezeInfo = item.is_freezable
     ? `<span class="badge-soft">Hỗ trợ tạm dừng tối đa ${item.max_freeze_days} ngày</span>`
     : `<span class="badge bg-light text-muted border">Không hỗ trợ tạm dừng</span>`;
+  const months = Math.round(item.duration_days / 30);
   return `<div class="col-md-4">
     <div class="card-ui p-4 d-flex flex-column h-100 justify-content-between">
       <div>
@@ -1657,7 +1656,7 @@ function packageCard(item) {
         <h5 class="mt-3 mb-2 fw-bold">${item.name}</h5>
         <div class="price mb-3">${money(item.price)}</div>
         <p class="text-secondary small mb-2">${item.description || ""}</p>
-        <p class="mb-3">${item.duration_days} ngày • ${item.max_bookings_per_week ? item.max_bookings_per_week + " buổi/tuần" : "Không giới hạn"}</p>
+        <p class="mb-3">${months} tháng • Không giới hạn</p>
         <div class="mb-3">${freezeInfo}</div>
       </div>
       ${getPackageActionButton(item.id)}
@@ -2127,7 +2126,7 @@ async function loadScheduleSetupForm() {
     classSelect.innerHTML = classes.map(c => `<option value="${c.id}">${c.name}</option>`).join("");
     roomSelect.innerHTML = rooms.map(r => `<option value="${r.id}">${r.name} (Suc chua: ${r.capacity})</option>`).join("");
     trainerSelect.innerHTML = `<option value="">-- Mac inh (Theo lop hoc) --</option>` +
-      trainers.map(t => `<option value="${t.id}">${t.name} (${t.specialty})</option>`).join("");
+      trainers.map(t => `<option value="${t.id}">${t.name}</option>`).join("");
 
     await loadAdminScheduleList();
     await loadAdminUnassignedSchedules();
@@ -2357,7 +2356,6 @@ async function loadAdminTrainerList() {
           <strong>${trainerItem.name}</strong><br>
           <small class="text-muted">${trainerItem.email || "-"}</small>
         </td>
-        <td>${trainerItem.specialty || "-"}</td>
         <td><strong class="text-danger">${money(trainerItem.session_price)}</strong></td>
         <td><span class="badge ${trainerItem.status === "active" ? "bg-success" : "bg-secondary"}">${trainerItem.status}</span></td>
         <td>
@@ -2367,9 +2365,9 @@ async function loadAdminTrainerList() {
           </div>
         </td>
       </tr>
-    `).join("") : `<tr><td colspan="5" class="text-center text-muted">${t("no_trainer_data")}</td></tr>`;
+    `).join("") : `<tr><td colspan="4" class="text-center text-muted">${t("no_trainer_data")}</td></tr>`;
   } catch (err) {
-    container.innerHTML = `<tr><td colspan="5" class="text-center text-danger">${err.message}</td></tr>`;
+    container.innerHTML = `<tr><td colspan="4" class="text-center text-danger">${err.message}</td></tr>`;
   }
 }
 
@@ -2395,7 +2393,7 @@ async function editAdminTrainer(trainerId) {
 
     trainerIdInput.value = String(trainer.id);
     nameInput.value = trainer.name || "";
-    specialtyInput.value = trainer.specialty || "";
+    specialtyInput.value = trainer.specialty || "General";
     expInput.value = String(trainer.experience_years || 0);
     priceInput.value = String(trainer.session_price || 0);
     statusSelect.value = trainer.status || "active";
@@ -2469,7 +2467,7 @@ async function loadAdminClassForm() {
     ]);
 
     categorySelect.innerHTML = categories.map(c => `<option value="${c.id}">${c.name}</option>`).join("");
-    trainerSelect.innerHTML = trainers.map(t => `<option value="${t.id}">${t.name} (${t.specialty})</option>`).join("");
+    trainerSelect.innerHTML = trainers.map(t => `<option value="${t.id}">${t.name}</option>`).join("");
 
     // Load existing class list
     const container = document.getElementById("adminClassListRows");
@@ -2530,8 +2528,7 @@ async function loadAdminPackageList() {
       <tr>
         <td><strong>${p.name}</strong></td>
         <td><strong class="text-danger">${money(p.price)}</strong></td>
-        <td>${p.duration_days} ngay</td>
-        <td>${p.max_bookings_per_week ? p.max_bookings_per_week + " buoi" : "Khong gioi han"}</td>
+        <td>${Math.round(p.duration_days / 30)} tháng</td>
         <td>${p.is_freezable ? `<span class="text-success">Co (${p.max_freeze_days} ngay)</span>` : '<span class="text-muted">Khong</span>'}</td>
         <td>
           <div class="btn-group gap-1">
@@ -2540,9 +2537,9 @@ async function loadAdminPackageList() {
           </div>
         </td>
       </tr>
-    `).join("") : `<tr><td colspan="6" class="text-center text-muted">${t("no_package_data")}</td></tr>`;
+    `).join("") : `<tr><td colspan="5" class="text-center text-muted">${t("no_package_data")}</td></tr>`;
   } catch (err) {
-    container.innerHTML = `<tr><td colspan="6" class="text-center text-danger">${err.message}</td></tr>`;
+    container.innerHTML = `<tr><td colspan="5" class="text-center text-danger">${err.message}</td></tr>`;
   }
 }
 
@@ -2561,8 +2558,6 @@ async function editAdminPackage(packageId) {
     if (priceInput === null) return;
     const daysInput = prompt("So ngay", String(pack.duration_days || 30));
     if (daysInput === null) return;
-    const weeklyInput = prompt("Gioi han buoi/tuan (de trong neu khong gioi han)", pack.max_bookings_per_week == null ? "" : String(pack.max_bookings_per_week));
-    if (weeklyInput === null) return;
     const freezable = confirm("Goi nay co ho tro tam dung khong?");
     const freezeDaysInput = prompt("So ngay tam dung toi da", String(pack.max_freeze_days || 0));
     if (freezeDaysInput === null) return;
@@ -2570,7 +2565,6 @@ async function editAdminPackage(packageId) {
     const price = parseFloat(priceInput);
     const durationDays = parseInt(daysInput, 10);
     const maxFreezeDays = parseInt(freezeDaysInput, 10);
-    const maxBookingsPerWeek = weeklyInput.trim() === "" ? null : parseInt(weeklyInput, 10);
 
     if (Number.isNaN(price) || price < 0) {
       showAlert("Gia goi khong hop le.", "danger");
@@ -2584,10 +2578,6 @@ async function editAdminPackage(packageId) {
       showAlert("So ngay tam dung khong hop le.", "danger");
       return;
     }
-    if (maxBookingsPerWeek !== null && (Number.isNaN(maxBookingsPerWeek) || maxBookingsPerWeek < 1)) {
-      showAlert("Gioi han buoi/tuan khong hop le.", "danger");
-      return;
-    }
 
     await apiFetch(`/admin/packages/${packageId}/`, {
       method: "PATCH",
@@ -2595,7 +2585,7 @@ async function editAdminPackage(packageId) {
         name: name.trim(),
         price,
         duration_days: durationDays,
-        max_bookings_per_week: maxBookingsPerWeek,
+        max_bookings_per_week: null,
         is_freezable: freezable,
         max_freeze_days: maxFreezeDays,
       }),
@@ -2621,13 +2611,12 @@ async function deleteAdminPackage(packageId) {
 async function submitCreatePackage(event) {
   event.preventDefault();
   const form = event.target;
-  const maxBookings = form.max_bookings_per_week.value;
   const payload = {
     name: form.name.value,
     description: form.description.value,
     price: parseFloat(form.price.value),
     duration_days: parseInt(form.duration_days.value),
-    max_bookings_per_week: maxBookings ? parseInt(maxBookings) : null,
+    max_bookings_per_week: null,
     is_freezable: form.is_freezable.checked,
     max_freeze_days: parseInt(form.max_freeze_days.value) || 30,
   };
@@ -2986,21 +2975,14 @@ async function initPtPackagesPage() {
     if (user && has_active_membership && !has_active_pt_package) {
       if (bookingSection) bookingSection.classList.remove("d-none");
 
-      // Populate packages select
-      const packageSelect = document.getElementById("packageSelect");
-      if (packageSelect) {
-        packageSelect.innerHTML = '<option value="">-- Chọn gói PT --</option>' + 
-          packages.map(pkg => `<option value="${pkg.id}">${pkg.name} (${pkg.total_sessions} buổi / ${pkg.duration_days} ngày)</option>`).join("");
-      }
-
       // Fetch and populate trainers
       const trainers = await apiFetch("/trainers/");
       const trainerSelect = document.getElementById("trainerSelect");
       if (trainerSelect) {
         // Filter active trainers
         const activeTrainers = trainers.filter(t => t.status === "active");
-        trainerSelect.innerHTML = '<option value="">-- Chọn Huấn luyện viên --</option>' + 
-          activeTrainers.map(t => `<option value="${t.id}">${t.name} (${t.specialty})</option>`).join("");
+        trainerSelect.innerHTML = '<option value="">-- Chọn Huấn luyện viên --</option>' +
+          activeTrainers.map(t => `<option value="${t.id}">${t.name}</option>`).join("");
       }
 
       // Set min start date to today
@@ -3008,14 +2990,6 @@ async function initPtPackagesPage() {
       if (startDateInput) {
         const today = new Date().toISOString().split("T")[0];
         startDateInput.setAttribute("min", today);
-      }
-
-      // Check url for pre-selected package
-      const urlParams = new URLSearchParams(window.location.search);
-      const pkgId = urlParams.get("package");
-      if (pkgId && packageSelect) {
-        packageSelect.value = pkgId;
-        selectPtPackageForBooking(pkgId);
       }
 
       // Attach event listeners for real-time preview
@@ -3029,25 +3003,10 @@ async function initPtPackagesPage() {
   }
 }
 
-function selectPtPackageForBooking(packageId) {
-  const packageSelect = document.getElementById("packageSelect");
-  const bookingSection = document.getElementById("bookingSection");
-  
-  if (packageSelect) {
-    packageSelect.value = packageId;
-  }
-  
-  if (bookingSection) {
-    bookingSection.classList.remove("d-none");
-    bookingSection.scrollIntoView({ behavior: "smooth" });
-  }
-
-  // Trigger preview
-  triggerPtBookingPreview();
-}
+// PT packages selection deleted
 
 function setupPtBookingFormListeners() {
-  const packageSelect = document.getElementById("packageSelect");
+  const monthsSelect = document.getElementById("monthsSelect");
   const trainerSelect = document.getElementById("trainerSelect");
   const startDateInput = document.getElementById("startDateInput");
   const startTimeInput = document.getElementById("startTimeInput");
@@ -3071,7 +3030,7 @@ function setupPtBookingFormListeners() {
     sessionsCountInput.addEventListener("change", autoCalcEnd);
   }
 
-  const elements = [packageSelect, trainerSelect, startDateInput, startTimeInput, endTimeInput, sessionsCountInput];
+  const elements = [monthsSelect, trainerSelect, startDateInput, startTimeInput, endTimeInput, sessionsCountInput];
   elements.forEach(el => {
     if (el) el.addEventListener("change", triggerPtBookingPreview);
   });
@@ -3086,7 +3045,7 @@ function setupPtBookingFormListeners() {
 }
 
 async function triggerPtBookingPreview() {
-  const packageSelect = document.getElementById("packageSelect");
+  const monthsSelect = document.getElementById("monthsSelect");
   const trainerSelect = document.getElementById("trainerSelect");
   const startDateInput = document.getElementById("startDateInput");
   const startTimeInput = document.getElementById("startTimeInput");
@@ -3099,9 +3058,9 @@ async function triggerPtBookingPreview() {
   const previewConflictAlert = document.getElementById("previewConflictAlert");
   const submitBtn = document.getElementById("submitBtn");
 
-  if (!packageSelect || !trainerSelect || !startDateInput || !startTimeInput || !endTimeInput || !submitBtn) return;
+  if (!monthsSelect || !trainerSelect || !startDateInput || !startTimeInput || !endTimeInput || !submitBtn) return;
 
-  const packageId = packageSelect.value;
+  const months = monthsSelect.value;
   const trainerId = trainerSelect.value;
   const startDate = startDateInput.value;
   const startTime = startTimeInput.value;
@@ -3112,7 +3071,7 @@ async function triggerPtBookingPreview() {
     .join(",");
 
   // Reset state if inputs are missing
-  if (!packageId || !trainerId || !startDate || !startTime || !endTime || !selectedWeekdays) {
+  if (!months || !trainerId || !startDate || !startTime || !endTime || !selectedWeekdays) {
     if (previewStatus) {
       previewStatus.classList.remove("d-none");
       previewStatus.className = "alert alert-secondary py-3 text-center mb-0";
@@ -3123,6 +3082,8 @@ async function triggerPtBookingPreview() {
     }
     if (previewContainer) previewContainer.classList.add("d-none");
     if (previewConflictAlert) previewConflictAlert.classList.add("d-none");
+    const priceInfoBox = document.getElementById("priceInfoBox");
+    if (priceInfoBox) priceInfoBox.classList.add("d-none");
     submitBtn.disabled = false;
     return;
   }
@@ -3138,10 +3099,12 @@ async function triggerPtBookingPreview() {
   }
   if (previewContainer) previewContainer.classList.add("d-none");
   if (previewConflictAlert) previewConflictAlert.classList.add("d-none");
+  const priceInfoBox = document.getElementById("priceInfoBox");
+  if (priceInfoBox) priceInfoBox.classList.add("d-none");
 
   try {
     const queryParams = new URLSearchParams({
-      package: packageId,
+      months: months,
       trainer: trainerId,
       start_date: startDate,
       weekdays: selectedWeekdays,
@@ -3181,6 +3144,21 @@ async function triggerPtBookingPreview() {
       if (previewStatus) previewStatus.classList.add("d-none");
       if (previewContainer) previewContainer.classList.remove("d-none");
 
+      // Show price details if returned
+      const priceInfoBox = document.getElementById("priceInfoBox");
+      const previewTrainerSessionPrice = document.getElementById("previewTrainerSessionPrice");
+      const previewTotalSessions = document.getElementById("previewTotalSessions");
+      const previewTotalPrice = document.getElementById("previewTotalPrice");
+
+      if (priceInfoBox && data.total_price !== undefined) {
+        priceInfoBox.classList.remove("d-none");
+        if (previewTrainerSessionPrice) previewTrainerSessionPrice.textContent = money(data.trainer_session_price);
+        if (previewTotalSessions) previewTotalSessions.textContent = data.total_sessions + " buổi";
+        if (previewTotalPrice) previewTotalPrice.textContent = money(data.total_price);
+      } else if (priceInfoBox) {
+        priceInfoBox.classList.add("d-none");
+      }
+
       if (hasConflict) {
         if (previewConflictAlert) previewConflictAlert.classList.remove("d-none");
         submitBtn.disabled = true;
@@ -3190,6 +3168,9 @@ async function triggerPtBookingPreview() {
       }
     }
   } catch (err) {
+    const priceInfoBox = document.getElementById("priceInfoBox");
+    if (priceInfoBox) priceInfoBox.classList.add("d-none");
+
     if (previewStatus) {
       previewStatus.classList.remove("d-none");
       previewStatus.className = "alert alert-danger py-3 text-center mb-0";
@@ -3205,7 +3186,7 @@ async function triggerPtBookingPreview() {
 async function submitPtBooking(event) {
   event.preventDefault();
 
-  const packageSelect = document.getElementById("packageSelect");
+  const monthsSelect = document.getElementById("monthsSelect");
   const trainerSelect = document.getElementById("trainerSelect");
   const startDateInput = document.getElementById("startDateInput");
   const startTimeInput = document.getElementById("startTimeInput");
@@ -3213,9 +3194,9 @@ async function submitPtBooking(event) {
   const noteInput = document.getElementById("noteInput");
   const checkboxes = document.querySelectorAll(".wd-checkbox");
 
-  if (!packageSelect || !trainerSelect || !startDateInput || !startTimeInput || !endTimeInput) return;
+  if (!monthsSelect || !trainerSelect || !startDateInput || !startTimeInput || !endTimeInput) return;
 
-  const packageId = parseInt(packageSelect.value);
+  const months = parseInt(monthsSelect.value);
   const trainerId = parseInt(trainerSelect.value);
   const startDate = startDateInput.value;
   const startTime = startTimeInput.value;
@@ -3225,7 +3206,7 @@ async function submitPtBooking(event) {
     .filter(cb => cb.checked)
     .map(cb => parseInt(cb.value));
 
-  if (!packageId || !trainerId || !startDate || !startTime || !endTime || !weekdays.length) {
+  if (!months || !trainerId || !startDate || !startTime || !endTime || !weekdays.length) {
     alert("Vui lòng điền đầy đủ các trường thông tin bắt buộc!");
     return;
   }
@@ -3234,7 +3215,7 @@ async function submitPtBooking(event) {
     const response = await apiFetch("/pt-booking/monthly/create/", {
       method: "POST",
       body: JSON.stringify({
-        package: packageId,
+        months: months,
         trainer: trainerId,
         start_date: startDate,
         weekdays: weekdays,
@@ -3244,7 +3225,8 @@ async function submitPtBooking(event) {
       })
     });
 
-    alert(response.message || "Đăng ký gói PT và tạo lịch tập thành công!");
+    const totalPrice = response.package ? response.package.total_price : 0;
+    alert((response.message || "Đăng ký gói PT và tạo lịch tập thành công!") + `\nSố tiền phải thanh toán: ${money(totalPrice)}`);
     window.location.href = "my-pt-packages.html";
   } catch (err) {
     alert("Lỗi đăng ký gói PT: " + err.message);
@@ -3257,7 +3239,7 @@ async function initMyPtPackagesPage() {
 
   try {
     const packages = await apiFetch("/my-pt-packages/");
-    
+
     if (!packages.length) {
       container.innerHTML = `
         <tr>
@@ -3331,6 +3313,9 @@ async function initMyPtPackagesPage() {
             <div class="small text-muted">KT: <span>${endDateStr}</span></div>
           </td>
           <td>
+            <span class="fw-bold text-dark">${money(pkg.total_price)}</span>
+          </td>
+          <td>
             ${statusBadge}
           </td>
           <td class="pe-4 text-end">
@@ -3366,7 +3351,7 @@ let activeDetailPackageId = null;
 
 async function loadMyPtPackageDetail(packageId) {
   activeDetailPackageId = packageId;
-  
+
   const listCol = document.getElementById("packagesListCol");
   const detailSection = document.getElementById("detailSection");
 
@@ -3400,17 +3385,19 @@ async function loadMyPtPackageDetail(packageId) {
     if (detailPtEmail) detailPtEmail.textContent = pkg.trainer_email || "-";
     if (detailUsedSessions) detailUsedSessions.textContent = `${pkg.used_sessions} buổi`;
     if (detailTotalSessions) detailTotalSessions.textContent = `${pkg.total_sessions} buổi`;
-    
+    const detailTotalPrice = document.getElementById("detailTotalPrice");
+    if (detailTotalPrice) detailTotalPrice.textContent = money(pkg.total_price);
+
     const startTimeFormatted = pkg.start_time.substring(0, 5);
     const endTimeFormatted = pkg.end_time.substring(0, 5);
     if (detailTimeRange) detailTimeRange.textContent = `${startTimeFormatted} - ${endTimeFormatted}`;
-    
+
     const wdText = pkg.selected_weekdays.map(d => {
       const labels = ["Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7", "Chủ nhật"];
       return labels[d] || d;
     }).join(", ");
     if (detailWeekdays) detailWeekdays.textContent = wdText;
-    
+
     const startDateStr = new Date(pkg.start_date).toLocaleDateString("vi-VN");
     const endDateStr = new Date(pkg.end_date).toLocaleDateString("vi-VN");
     if (detailDateRange) detailDateRange.textContent = `${startDateStr} - ${endDateStr}`;
@@ -3517,22 +3504,22 @@ let adminActiveTrainersList = [];
 async function loadAdminUnassignedSchedules() {
   const container = document.getElementById("adminUnassignedScheduleListRows");
   if (!container) return;
-  
+
   try {
     if (!adminActiveTrainersList.length) {
       adminActiveTrainersList = await apiFetch("/trainers/");
     }
-    
+
     const schedules = await apiFetch("/schedules/?unassigned=true");
     if (!schedules.length) {
       container.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-muted">Không có ca học nào chưa phân công HLV.</td></tr>';
       return;
     }
-    
+
     container.innerHTML = schedules.map(s => {
       const dateStr = new Date(s.start_time).toLocaleString("vi-VN");
-      const options = adminActiveTrainersList.map(t => `<option value="${t.id}">${t.name} (${t.specialty})</option>`).join("");
-      
+      const options = adminActiveTrainersList.map(t => `<option value="${t.id}">${t.name}</option>`).join("");
+
       return `
         <tr>
           <td><strong>${s.gym_class_name}</strong></td>
@@ -3563,7 +3550,7 @@ async function adminAssignTrainer(scheduleId) {
     alert("Vui lòng chọn một huấn luyện viên để phân công!");
     return;
   }
-  
+
   try {
     await apiFetch(`/schedules/${scheduleId}/assign/`, {
       method: "POST",

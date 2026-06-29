@@ -4,7 +4,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from gym_booking_backend.presentation.views import BaseAPIView
 
-from gym_booking_backend.infrastructure.models import PTPackage, UserPTPackage, PTBooking, TrainerSchedule
+from gym_booking_backend.infrastructure.models import UserPTPackage, PTBooking, TrainerSchedule
 from gym_booking_backend.application.services.pt_booking_service import pt_booking_service
 from gym_booking_backend.domain.constants import WeekdayChoices, UserPTPackageStatus
 
@@ -13,7 +13,6 @@ class PTPackageListAPIView(BaseAPIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
-        packages = PTPackage.objects.filter(is_active=True)
         user = request.user
         has_active_membership = False
         has_active_pt_package = False
@@ -25,10 +24,8 @@ class PTPackageListAPIView(BaseAPIView):
                 user=user, status=UserPTPackageStatus.ACTIVE
             ).exists()
 
-        from gym_booking_backend.presentation.serializers import PTPackageSerializer
-        serialized_packages = PTPackageSerializer(packages, many=True).data
         return Response({
-            "packages": serialized_packages,
+            "packages": [],
             "has_active_membership": has_active_membership,
             "has_active_pt_package": has_active_pt_package
         }, status=status.HTTP_200_OK)
@@ -60,7 +57,7 @@ class MonthlyPTBookingCreateAPIView(BaseAPIView):
         validated_data = serializer.validated_data
         result = pt_booking_service.create_monthly_pt_bookings(
             user=request.user,
-            package_id=validated_data["package"],
+            months=validated_data["months"],
             trainer_id=validated_data["trainer"],
             start_date=validated_data["start_date"],
             selected_weekdays=validated_data["weekdays"],
@@ -140,21 +137,22 @@ class PTBookingPreviewAPIView(BaseAPIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        package_id = request.GET.get("package")
+        months_str = request.GET.get("months")
         trainer_id = request.GET.get("trainer")
         start_date_str = request.GET.get("start_date")
         weekdays_str = request.GET.get("weekdays")
         start_time_str = request.GET.get("start_time")
         end_time_str = request.GET.get("end_time")
 
-        if not all([package_id, trainer_id, start_date_str, weekdays_str, start_time_str, end_time_str]):
+        if not all([months_str, trainer_id, start_date_str, weekdays_str, start_time_str, end_time_str]):
             return Response({"message": "Vui lòng nhập đầy đủ thông tin để xem trước lịch tập."}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
+            months = int(months_str)
             result = pt_booking_service.preview_monthly_pt_bookings(
                 user=request.user,
-                package_id=int(package_id),
+                months=months,
                 trainer_id=int(trainer_id),
                 start_date=start_date,
                 selected_weekdays=weekdays_str,
@@ -179,7 +177,24 @@ class PTBookingPreviewAPIView(BaseAPIView):
                     "user_conflict": p["user_conflict"],
                     "is_valid": p["is_valid"]
                 })
-            return Response({"sessions": data}, status=status.HTTP_200_OK)
+
+            from gym_booking_backend.infrastructure.models import Trainer
+            try:
+                t_obj = Trainer.objects.get(id=int(trainer_id))
+                total_sessions = len(data)
+                total_price = t_obj.session_price * total_sessions
+                trainer_session_price = t_obj.session_price
+            except Exception:
+                total_price = 0
+                trainer_session_price = 0
+                total_sessions = 0
+
+            return Response({
+                "sessions": data,
+                "total_price": total_price,
+                "trainer_session_price": trainer_session_price,
+                "total_sessions": total_sessions
+            }, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({"message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 

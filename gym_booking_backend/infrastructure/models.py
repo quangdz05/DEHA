@@ -297,45 +297,6 @@ class TrainerBooking(TimestampedModel):
         return self.booking_code
 
 
-# VĐ #3 + #10: TrainerMonthlyBooking kế thừa TimestampedModel, trainer FK → PROTECT
-class TrainerMonthlyBooking(TimestampedModel):
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="trainer_monthly_bookings")
-    # VĐ #10: CASCADE → PROTECT
-    trainer = models.ForeignKey(Trainer, on_delete=models.PROTECT, related_name="monthly_bookings")
-    booking_code = models.CharField(max_length=30, unique=True)
-    start_date = models.DateField()
-    end_date = models.DateField()
-    months = models.PositiveIntegerField(default=1)
-    sessions_per_week = models.PositiveIntegerField(default=3)
-    preferred_time = models.TimeField(null=True, blank=True)
-    note = models.TextField(blank=True)
-    status = models.CharField(max_length=20, choices=BookingStatus.choices, default=BookingStatus.PENDING)
-    cancellation_reason = models.TextField(blank=True)
-    cancelled_at = models.DateTimeField(null=True, blank=True)
-
-    @property
-    def booked_at(self):
-        return self.created_at
-
-    class Meta:
-        ordering = ["-created_at", "id"]
-        constraints = [
-            models.UniqueConstraint(
-                fields=["user", "trainer", "start_date"],
-                condition=models.Q(status__in=["pending", "confirmed"]),
-                name="unique_active_trainer_monthly_booking",
-            ),
-            # VĐ #6: CHECK constraint
-            models.CheckConstraint(
-                condition=models.Q(start_date__lt=models.F("end_date")),
-                name="check_monthly_booking_start_before_end",
-            ),
-        ]
-
-    def __str__(self):
-        return self.booking_code
-
-
 # VĐ #12: MembershipPackage kế thừa SoftDeleteModel
 class MembershipPackage(SoftDeleteModel):
     name = models.CharField(max_length=100, unique=True)
@@ -501,22 +462,6 @@ class Review(models.Model):
         return f"{self.user.username} - {target} ({self.rating})"
 
 
-# VĐ #12: PTPackage kế thừa SoftDeleteModel
-class PTPackage(SoftDeleteModel):
-    name = models.CharField(max_length=100, unique=True)
-    description = models.TextField(blank=True)
-    price = models.DecimalField(max_digits=10, decimal_places=2)
-    duration_days = models.PositiveIntegerField(help_text="Thời hạn gói (ngày)")
-    total_sessions = models.PositiveIntegerField(help_text="Tổng số buổi tập")
-    is_active = models.BooleanField(default=True)
-
-    class Meta:
-        ordering = ["price", "name"]
-
-    def __str__(self):
-        return f"{self.name} ({self.total_sessions} sessions / {self.duration_days} days)"
-
-
 class TrainerSchedule(TimestampedModel):
     trainer = models.ForeignKey(Trainer, on_delete=models.CASCADE, related_name="pt_schedules")
     weekday = models.IntegerField(choices=WeekdayChoices.choices, help_text="Thứ trong tuần (0=Monday)")
@@ -541,7 +486,6 @@ class TrainerSchedule(TimestampedModel):
 class UserPTPackage(TimestampedModel):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="user_pt_packages")
     trainer = models.ForeignKey(Trainer, on_delete=models.PROTECT, related_name="member_pt_packages")
-    package = models.ForeignKey(PTPackage, on_delete=models.PROTECT, related_name="purchases")
     start_date = models.DateField()
     end_date = models.DateField()
     total_sessions = models.PositiveIntegerField()
@@ -563,6 +507,10 @@ class UserPTPackage(TimestampedModel):
     @property
     def remaining_sessions(self):
         return max(self.total_sessions - self.used_sessions, 0)
+
+    @property
+    def total_price(self):
+        return self.trainer.session_price * self.total_sessions
 
     class Meta:
         ordering = ["-created_at"]

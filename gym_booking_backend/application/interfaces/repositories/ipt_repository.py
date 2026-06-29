@@ -3,14 +3,6 @@ from abc import ABC, abstractmethod
 
 class IPTRepository(ABC):
     @abstractmethod
-    def get_active_pt_packages(self):
-        pass
-
-    @abstractmethod
-    def get_pt_package_by_id(self, package_id):
-        pass
-
-    @abstractmethod
     def get_trainer_schedules(self, trainer):
         pass
 
@@ -43,7 +35,7 @@ class IPTRepository(ABC):
         pass
 
     @abstractmethod
-    def create_user_pt_package(self, user, trainer, package, start_date, end_date, total_sessions, weekdays_list, start_time, end_time):
+    def create_user_pt_package(self, user, trainer, start_date, end_date, total_sessions, weekdays_list, start_time, end_time):
         pass
 
     @abstractmethod

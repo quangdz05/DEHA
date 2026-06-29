@@ -61,27 +61,3 @@ class IBookingRepository(ABC):
     @abstractmethod
     def create_trainer_booking(self, user, trainer, booking_code, start_time, end_time, note=""):
         pass
-
-    @abstractmethod
-    def get_user_trainer_monthly_bookings(self, user):
-        pass
-
-    @abstractmethod
-    def get_trainer_monthly_bookings(self, trainer):
-        pass
-
-    @abstractmethod
-    def get_all_trainer_monthly_bookings(self):
-        pass
-
-    @abstractmethod
-    def get_trainer_monthly_booking_by_id(self, booking_id):
-        pass
-
-    @abstractmethod
-    def has_overlapping_monthly_booking(self, user, trainer, start_date, end_date, booking_id=None):
-        pass
-
-    @abstractmethod
-    def create_trainer_monthly_booking(self, user, trainer, booking_code, start_date, end_date, months, sessions_per_week, preferred_time=None, note=""):
-        pass

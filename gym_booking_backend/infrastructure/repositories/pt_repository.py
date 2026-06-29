@@ -2,7 +2,6 @@ import datetime
 from django.db.models import Q
 from gym_booking_backend.domain.constants import BookingStatus, PTBookingStatus, ScheduleStatus
 from gym_booking_backend.infrastructure.models import (
-    PTPackage,
     TrainerSchedule,
     UserPTPackage,
     PTBooking,
@@ -15,11 +14,7 @@ ACTIVE_PT_BOOKING_STATUSES = [PTBookingStatus.PENDING, PTBookingStatus.CONFIRMED
 
 
 class DjangoPTRepository(IPTRepository):
-    def get_active_pt_packages(self):
-        return PTPackage.objects.filter(is_active=True)
-
-    def get_pt_package_by_id(self, package_id):
-        return PTPackage.objects.filter(id=package_id).first()
+    # PTPackage methods removed
 
     def get_trainer_schedules(self, trainer):
         return TrainerSchedule.objects.filter(trainer=trainer, is_available=True)
@@ -28,10 +23,10 @@ class DjangoPTRepository(IPTRepository):
         return TrainerSchedule.objects.filter(trainer=trainer, weekday=weekday, is_available=True).first()
 
     def get_user_pt_packages(self, user):
-        return UserPTPackage.objects.select_related("trainer", "package").filter(user=user)
+        return UserPTPackage.objects.select_related("trainer").filter(user=user)
 
     def get_user_pt_package_detail(self, pk, user=None):
-        query = UserPTPackage.objects.select_related("trainer", "package")
+        query = UserPTPackage.objects.select_related("trainer")
         if user:
             query = query.filter(user=user)
         return query.filter(id=pk).first()
@@ -97,12 +92,11 @@ class DjangoPTRepository(IPTRepository):
         from gym_booking_backend.domain.constants import UserPTPackageStatus
         return UserPTPackage.objects.filter(user=user, status=UserPTPackageStatus.ACTIVE).exists()
 
-    def create_user_pt_package(self, user, trainer, package, start_date, end_date, total_sessions, weekdays_list, start_time, end_time):
+    def create_user_pt_package(self, user, trainer, start_date, end_date, total_sessions, weekdays_list, start_time, end_time):
         from gym_booking_backend.domain.constants import UserPTPackageStatus
         return UserPTPackage.objects.create(
             user=user,
             trainer=trainer,
-            package=package,
             start_date=start_date,
             end_date=end_date,
             total_sessions=total_sessions,

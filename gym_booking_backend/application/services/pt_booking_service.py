@@ -74,14 +74,10 @@ def get_trainer_busy_slots(trainer, start_date, end_date):
 
 
 class PTBookingService(IPTBookingService):
-    def preview_monthly_pt_bookings(self, user, package_id, trainer_id, start_date, selected_weekdays, start_time, end_time) -> Result:
+    def preview_monthly_pt_bookings(self, user, months, trainer_id, start_date, selected_weekdays, start_time, end_time) -> Result:
         try:
             if not membership_repository.has_active_membership(user):
                 return Result.failure_result("You need an active gym membership to purchase a PT package.", status_code=400)
-
-            package = pt_repository.get_pt_package_by_id(package_id)
-            if not package or not package.is_active:
-                return Result.failure_result("PT Package not found or is inactive.", status_code=404)
 
             trainer = trainer_repository.get_trainer_by_id(trainer_id)
             if not trainer:
@@ -133,7 +129,7 @@ class PTBookingService(IPTBookingService):
                         }
                         for s in avail_schedules
                     ]
-                    busy_slots = get_trainer_busy_slots(trainer, start_date, start_date + timedelta(days=package.duration_days))
+                    busy_slots = get_trainer_busy_slots(trainer, start_date, start_date + timedelta(days=months * 30))
                     return Result(
                         success=False,
                         message=f"Trainer {trainer.name} is not available on {weekday_label}.",
@@ -155,7 +151,7 @@ class PTBookingService(IPTBookingService):
                         }
                         for s in avail_schedules
                     ]
-                    busy_slots = get_trainer_busy_slots(trainer, start_date, start_date + timedelta(days=package.duration_days))
+                    busy_slots = get_trainer_busy_slots(trainer, start_date, start_date + timedelta(days=months * 30))
                     return Result(
                         success=False,
                         message=(
@@ -169,11 +165,20 @@ class PTBookingService(IPTBookingService):
                         status_code=400
                     )
 
-            session_dates = get_session_dates(start_date, selected_weekdays, package.total_sessions, package.duration_days)
-            if len(session_dates) < package.total_sessions:
+            # Generate dynamic session dates based on start_date, selected weekdays and duration of months
+            duration_days = months * 30
+            end_date = start_date + timedelta(days=duration_days - 1)
+            session_dates = []
+            current_date = start_date
+
+            while current_date <= end_date:
+                if current_date.weekday() in selected_weekdays:
+                    session_dates.append(current_date)
+                current_date += timedelta(days=1)
+
+            if not session_dates:
                 return Result.failure_result(
-                    f"Cannot schedule all {package.total_sessions} sessions within the package duration of {package.duration_days} days. "
-                    f"Only {len(session_dates)} sessions could be generated. Please select more weekdays or change start date.",
+                    "No sessions could be generated within the selected timeframe. Please select more weekdays or change start date.",
                     status_code=400
                 )
 
@@ -196,7 +201,7 @@ class PTBookingService(IPTBookingService):
             return Result.failure_result(str(exc), status_code=400)
 
     @transaction.atomic
-    def create_monthly_pt_bookings(self, user, package_id, trainer_id, start_date, selected_weekdays, start_time, end_time, note="") -> Result:
+    def create_monthly_pt_bookings(self, user, months, trainer_id, start_date, selected_weekdays, start_time, end_time, note="") -> Result:
         try:
             if isinstance(selected_weekdays, list):
                 selected_weekdays_list = [int(wd) for wd in selected_weekdays]
@@ -206,13 +211,13 @@ class PTBookingService(IPTBookingService):
                 return Result.failure_result("Selected weekdays is invalid.", status_code=400)
 
             preview_res = self.preview_monthly_pt_bookings(
-                user, package_id, trainer_id, start_date, selected_weekdays_list, start_time, end_time
+                user, months, trainer_id, start_date, selected_weekdays_list, start_time, end_time
             )
             if not preview_res.success:
                 return preview_res
 
             previews = preview_res.data
-            package = pt_repository.get_pt_package_by_id(package_id)
+            
             trainer = trainer_repository.get_trainer_by_id(trainer_id)
 
             conflicts = []
@@ -236,7 +241,7 @@ class PTBookingService(IPTBookingService):
                     }
                     for s in avail_schedules
                 ]
-                busy_slots = get_trainer_busy_slots(trainer, start_date, start_date + timedelta(days=package.duration_days))
+                busy_slots = get_trainer_busy_slots(trainer, start_date, start_date + timedelta(days=months * 30))
                 return Result(
                     success=False,
                     message="Schedule conflict detected: " + "; ".join(conflicts),
@@ -261,14 +266,14 @@ class PTBookingService(IPTBookingService):
                 except ValueError:
                     end_time = datetime.strptime(end_time, "%H:%M:%S").time()
 
-            end_date = start_date + timedelta(days=package.duration_days - 1)
+            end_date = start_date + timedelta(days=months * 30 - 1)
+            total_sessions = len(previews)
             user_pt_package = pt_repository.create_user_pt_package(
                 user=user,
                 trainer=trainer,
-                package=package,
                 start_date=start_date,
                 end_date=end_date,
-                total_sessions=package.total_sessions,
+                total_sessions=total_sessions,
                 weekdays_list=weekdays_list,
                 start_time=start_time,
                 end_time=end_time,

@@ -51,7 +51,6 @@ from gym_booking_backend.presentation.serializers import (
     ReviewSerializer,
     TrainerSerializer,
     TrainerBookingSerializer,
-    TrainerMonthlyBookingSerializer,
     UserMembershipSerializer,
     UserRegisterSerializer,
 )
@@ -458,40 +457,7 @@ class TrainerBookingCancelAPIView(BaseAPIView):
         return self.handle_result(result, TrainerBookingSerializer)
 
 
-class TrainerMonthlyBookingCreateAPIView(BaseAPIView):
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request):
-        serializer = TrainerMonthlyBookingSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        data = serializer.validated_data
-        result = booking_service.create_trainer_monthly_booking(
-            request.user,
-            data["trainer"].id,
-            data["start_date"],
-            data.get("months", 1),
-            data.get("sessions_per_week", 3),
-            data.get("preferred_time"),
-            data.get("note", ""),
-        )
-        return self.handle_result(result, TrainerMonthlyBookingSerializer)
-
-
-class MyTrainerMonthlyBookingsAPIView(BaseAPIView):
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request):
-        result = booking_service.get_my_trainer_monthly_bookings(request.user)
-        return self.handle_result(result, TrainerMonthlyBookingSerializer, many=True)
-
-
-class TrainerMonthlyBookingCancelAPIView(BaseAPIView):
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request, booking_id):
-        reason = request.data.get("cancellation_reason", "")
-        result = booking_service.cancel_trainer_monthly_booking(request.user, booking_id, reason)
-        return self.handle_result(result, TrainerMonthlyBookingSerializer)
+# TrainerMonthlyBookingCreateAPIView, MyTrainerMonthlyBookingsAPIView, TrainerMonthlyBookingCancelAPIView removed
 
 
 class BookingCancelAPIView(BaseAPIView):
@@ -705,22 +671,7 @@ class AdminScheduleBookingListAPIView(BaseAPIView):
         return self.handle_result(Result.success_result(data))
 
 
-class AdminTrainerMonthlyBookingListAPIView(BaseAPIView):
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request):
-        result = booking_service.get_all_trainer_monthly_bookings(request.user)
-        return self.handle_result(result, TrainerMonthlyBookingSerializer, many=True)
-
-
-class AdminTrainerMonthlyBookingStatusAPIView(BaseAPIView):
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request, booking_id):
-        if not hasattr(request.user, "profile") or request.user.profile.role != "admin":
-            return self.handle_result(Result.failure_result("Permission denied.", status_code=403))
-        result = booking_service.update_admin_trainer_monthly_booking_status(booking_id, request.data.get("status"))
-        return self.handle_result(result, TrainerMonthlyBookingSerializer)
+# AdminTrainerMonthlyBookingListAPIView, AdminTrainerMonthlyBookingStatusAPIView removed
 
 
 class AdminPaymentListAPIView(BaseAPIView):
@@ -817,20 +768,7 @@ class TrainerPersonalBookingStatusAPIView(BaseAPIView):
         return self.handle_result(result, TrainerBookingSerializer)
 
 
-class TrainerMonthlyBookingListAPIView(BaseAPIView):
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request):
-        result = booking_service.get_trainer_monthly_bookings(request.user)
-        return self.handle_result(result, TrainerMonthlyBookingSerializer, many=True)
-
-
-class TrainerMonthlyBookingStatusAPIView(BaseAPIView):
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request, booking_id):
-        result = booking_service.update_trainer_monthly_booking_status(request.user, booking_id, request.data.get("status"))
-        return self.handle_result(result, TrainerMonthlyBookingSerializer)
+# TrainerMonthlyBookingListAPIView, TrainerMonthlyBookingStatusAPIView removed
 
 
 class TrainerBookingAttendanceAPIView(BaseAPIView):
