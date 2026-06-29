@@ -715,21 +715,12 @@ class PTBookingTests(APITestCase):
         self.assertEqual(PTBooking.objects.filter(user_pt_package=user_package, status="confirmed").count(), 0)
 
     def test_pt_booking_preview_rich_errors(self):
-        from gym_booking_backend.infrastructure.models import PTPackage, TrainerSchedule
+        from gym_booking_backend.infrastructure.models import TrainerSchedule
         # Authenticate as member
         self.client.force_authenticate(user=self.member_user)
 
         # Clear existing schedules to test NO schedule case
         TrainerSchedule.objects.filter(trainer=self.trainer_record).delete()
-
-        # Create PT Package
-        pt_package = PTPackage.objects.create(
-            name="Personal Training 10 Sessions",
-            price=500000.00,
-            duration_days=30,
-            total_sessions=10,
-            is_active=True
-        )
 
         # 1. Preview on weekday with NO trainer schedule
         # Monday is weekday 0, date 2026-06-29 is a Monday
